@@ -348,15 +348,7 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Icon(icon, size: 20),
           ],
         ),
       ),
@@ -970,6 +962,33 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                                     Icons.visibility,
                                     Colors.purple,
                                     () => _mostrarDetalhesLaudo(laudo),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildActionButton(
+                                    'Compartilhar',
+                                    Icons.share,
+                                    Colors.orange,
+                                    () async {
+                                      try {
+                                        await PdfService.salvarECompartilharPdf(laudo);
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Row(
+                                              children: [
+                                                Icon(Icons.error, color: Colors.white),
+                                                SizedBox(width: 8),
+                                                Text('Erro ao compartilhar PDF. Tente novamente.'),
+                                              ],
+                                            ),
+                                            backgroundColor: Colors.red,
+                                            duration: Duration(seconds: 3),
+                                          ),
+                                        );
+                                      }
+                                    },
                                   ),
                                 ),
                                 const SizedBox(width: 12),

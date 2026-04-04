@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'menu_screen.dart';
 import '../services/auth_service.dart';
 
@@ -19,10 +20,42 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   @override
-  void dispose() {
-    _emailController.dispose();
-    _senhaController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _carregarCredenciaisSalvas();
+  }
+
+  Future<void> _carregarCredenciaisSalvas() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final emailSalvo = prefs.getString('lembrar_email');
+      final senhaSalva = prefs.getString('lembrar_senha');
+      
+      if (emailSalvo != null && senhaSalva != null) {
+        setState(() {
+          _emailController.text = emailSalvo;
+          _senhaController.text = senhaSalva;
+          _lembrarSenha = true;
+        });
+      }
+    } catch (e) {
+      print('Erro ao carregar credenciais salvas: $e');
+    }
+  }
+
+  Future<void> _salvarCredenciais() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_lembrarSenha) {
+        await prefs.setString('lembrar_email', _emailController.text.trim());
+        await prefs.setString('lembrar_senha', _senhaController.text);
+      } else {
+        await prefs.remove('lembrar_email');
+        await prefs.remove('lembrar_senha');
+      }
+    } catch (e) {
+      print('Erro ao salvar credenciais: $e');
+    }
   }
 
   Future<void> _fazerLogin() async {
@@ -39,6 +72,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
 
         if (user != null) {
+          // Salvar credenciais se lembrar estiver marcado
+          await _salvarCredenciais();
+          
           // Login bem sucedido
           if (mounted) {
             Navigator.pushReplacement(
@@ -808,5 +844,12 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
     );
+  }
+  
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _senhaController.dispose();
+    super.dispose();
   }
 }

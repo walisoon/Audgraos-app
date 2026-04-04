@@ -79,27 +79,32 @@ class StorageService {
     }
   }
 
-  // Gerar próximo ID automático para laudo
+  // Gerar próximo ID do laudo (começando do 282)
   static Future<String> _gerarProximoIdLaudo() async {
-    final laudos = await carregarLaudos();
-    
-    if (laudos.isEmpty) {
-      return '00001';
-    }
-    
-    // Encontrar o maior ID existente
-    int maiorId = 0;
-    for (final laudo in laudos) {
-      final idStr = laudo['id']?.toString() ?? '00000';
-      final id = int.tryParse(idStr) ?? 0;
-      if (id > maiorId) {
-        maiorId = id;
+    try {
+      final laudos = await carregarLaudos();
+      
+      if (laudos.isEmpty) {
+        return '00282'; // Primeiro laudo
       }
+      
+      // Encontrar o maior ID existente
+      int maiorId = 281; // Começar do 281 para o próximo ser 282
+      for (final laudo in laudos) {
+        final idStr = laudo['id']?.toString() ?? '00000';
+        final id = int.tryParse(idStr) ?? 281;
+        if (id > maiorId) {
+          maiorId = id;
+        }
+      }
+      
+      // Gerar próximo ID com 5 dígitos
+      final proximoId = maiorId + 1;
+      return proximoId.toString().padLeft(5, '0');
+    } catch (e) {
+      print('Erro ao gerar próximo ID: $e');
+      return '00282'; // ID padrão em caso de erro
     }
-    
-    // Gerar próximo ID com 5 dígitos
-    final proximoId = maiorId + 1;
-    return proximoId.toString().padLeft(5, '0');
   }
 
   // Adicionar um novo laudo
@@ -198,6 +203,34 @@ class StorageService {
       await salvarLaudos(laudos);
     } catch (e) {
       print('Erro ao excluir laudo: $e');
+    }
+  }
+
+  // Atualizar um laudo existente
+  static Future<void> atualizarLaudo(String id, Map<String, dynamic> laudoAtualizado) async {
+    try {
+      debugPrint('=== STORAGE: ATUALIZANDO LAUDO ===');
+      debugPrint('ID do laudo: $id');
+      debugPrint('Dados atualizados: $laudoAtualizado');
+      
+      final laudos = await carregarLaudos();
+      debugPrint('Total de laudos antes: ${laudos.length}');
+      
+      // Encontrar o índice do laudo
+      final index = laudos.indexWhere((laudo) => laudo['id'].toString() == id);
+      
+      if (index != -1) {
+        // Atualizar o laudo existente
+        laudos[index] = laudoAtualizado;
+        await salvarLaudos(laudos);
+        debugPrint('Laudo atualizado com sucesso! Total após: ${laudos.length}');
+      } else {
+        debugPrint('Laudo não encontrado para atualização. ID: $id');
+        throw Exception('Laudo não encontrado');
+      }
+    } catch (e) {
+      debugPrint('Erro ao atualizar laudo: $e');
+      rethrow;
     }
   }
 

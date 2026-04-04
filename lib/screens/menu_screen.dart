@@ -7,6 +7,8 @@ import 'auditorias_screen.dart';
 import 'laudos_list_screen.dart';
 import 'nova_ordem_servico_screen.dart';
 import 'classificacao_laudo_screen.dart';
+import 'usuarios_screen.dart';
+import '../services/auth_service.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -47,6 +49,12 @@ class _MenuScreenState extends State<MenuScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const LaudosListScreen()),
+        );
+        break;
+      case 'usuarios':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const UsuariosScreen()),
         );
         break;
     }
@@ -215,32 +223,46 @@ class MenuItem {
   });
 }
 
-final List<MenuItem> menuItems = [
-  MenuItem(
-    id: 'ordens',
-    title: 'Ordens de Serviço',
-    icon: Icons.assignment,
-    color: const Color(0xFF63b14a),
-  ),
-  MenuItem(
-    id: 'clientes',
-    title: 'Clientes',
-    icon: Icons.people,
-    color: const Color(0xFF3b82f6),
-  ),
-  MenuItem(
-    id: 'auditorias',
-    title: 'Auditorias',
-    icon: Icons.analytics,
-    color: const Color(0xFF8b5cf6),
-  ),
-  MenuItem(
-    id: 'laudos',
-    title: 'Laudos',
-    icon: Icons.description,
-    color: const Color(0xFFf59e0b),
-  ),
-];
+List<MenuItem> get menuItems {
+  List<MenuItem> items = [
+    MenuItem(
+      id: 'ordens',
+      title: 'Ordens de Serviço',
+      icon: Icons.assignment,
+      color: const Color(0xFF63b14a),
+    ),
+    MenuItem(
+      id: 'clientes',
+      title: 'Clientes',
+      icon: Icons.people,
+      color: const Color(0xFF3b82f6),
+    ),
+    MenuItem(
+      id: 'auditorias',
+      title: 'Auditorias',
+      icon: Icons.analytics,
+      color: const Color(0xFF8b5cf6),
+    ),
+    MenuItem(
+      id: 'laudos',
+      title: 'Laudos',
+      icon: Icons.description,
+      color: const Color(0xFFf59e0b),
+    ),
+  ];
+
+  // Adicionar opção Usuários apenas para administradores
+  if (AuthService.podeAcessarUsuarios()) {
+    items.add(MenuItem(
+      id: 'usuarios',
+      title: 'Usuários',
+      icon: Icons.admin_panel_settings,
+      color: const Color(0xFFef4444),
+    ));
+  }
+
+  return items;
+}
 
 class ActionButton extends StatelessWidget {
   final MenuItem item;

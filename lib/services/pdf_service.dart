@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 
 class PdfService {
   static Future<void> gerarPdfLaudo(Map<String, dynamic> laudo) async {
@@ -67,6 +71,95 @@ class PdfService {
       debugPrint('=== PDF ENVIADO COM SUCESSO ===');
     } catch (e, stackTrace) {
       debugPrint('=== ERRO AO GERAR PDF ===');
+      debugPrint('Erro: $e');
+      debugPrint('Stack: $stackTrace');
+      rethrow;
+    }
+  }
+  
+  static Future<void> salvarECompartilharPdf(Map<String, dynamic> laudo) async {
+    debugPrint('=== SALVANDO E COMPARTILHANDO PDF ===');
+    
+    try {
+      final pdf = pw.Document();
+      
+      // Pre-load the header
+      final headerWidget = await _buildHeader();
+      
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(20),
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Cabeçalho da Empresa
+                headerWidget,
+                pw.SizedBox(height: 20),
+                
+                // Título e Dados Principais
+                _buildTitleSection(laudo),
+                pw.SizedBox(height: 15),
+                
+                // Dados da Auditoria
+                _buildAuditDataSection(laudo),
+                pw.SizedBox(height: 15),
+                
+                // Dados da Classificação e Teste
+                _buildClassificationSection(laudo),
+                pw.SizedBox(height: 15),
+                
+                pw.SizedBox(height: 20),
+                
+                // Seção de Assinatura
+                _buildSignatureSection(laudo),
+                
+                pw.Expanded(child: pw.SizedBox()),
+                
+                // Rodapé
+                _buildFooter(),
+              ],
+            );
+          },
+        ),
+      );
+      
+      debugPrint('=== PDF CRIADO, SALVANDO ARQUIVO ===');
+      
+      // Gerar bytes do PDF
+      final pdfBytes = await pdf.save();
+      
+      // Obter diretório temporário
+      Directory? directory;
+      if (kIsWeb) {
+        // Para web, usamos uma abordagem diferente
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => pdfBytes,
+          name: 'Laudo_${laudo['id'] ?? 'Unknown'}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+        );
+        return;
+      } else {
+        directory = await getTemporaryDirectory();
+      }
+      
+      // Salvar arquivo
+      final fileName = 'Laudo_${laudo['id'] ?? 'Unknown'}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(pdfBytes);
+      
+      debugPrint('=== ARQUIVO SALVO EM: ${file.path} ===');
+      
+      // Compartilhar arquivo
+      await Share.shareXFiles(
+        [XFile(file.path, name: fileName)],
+        text: 'Laudo de Auditoria - ${laudo['id'] ?? 'Unknown'}',
+        subject: 'Audgrãos - Laudo de Auditoria',
+      );
+      
+      debugPrint('=== PDF COMPARTILHADO COM SUCESSO ===');
+    } catch (e, stackTrace) {
+      debugPrint('=== ERRO AO SALVAR/COMPARTILHAR PDF ===');
       debugPrint('Erro: $e');
       debugPrint('Stack: $stackTrace');
       rethrow;
@@ -211,11 +304,8 @@ class PdfService {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    _buildInfoRow('Umidade:', 'N/A'), // Campo não disponível no formulário
-                    _buildInfoRow('Matérias Estranhas:', 'N/A'), // Campo não disponível no formulário
-                    _buildInfoRow('Queimados:', 'N/A'), // Campo não disponível no formulário
-                    _buildInfoRow('Mofados:', 'N/A'), // Campo não disponível no formulário
-                    _buildInfoRow('Verdes:', 'N/A'), // Campo não disponível no formulário
+                    _buildInfoRow('Odor:', laudo['odor']?.toString() ?? 'N/A'),
+                    _buildInfoRow('Sementes:', laudo['sementes']?.toString() ?? 'N/A'),
                   ],
                 ),
               ),
@@ -224,24 +314,22 @@ class PdfService {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    _buildInfoRow('Odor:', laudo['odor']?.toString() ?? 'N/A'),
-                    _buildInfoRow('Sementes:', laudo['sementes']?.toString() ?? 'N/A'),
                     _buildInfoRow('Tipo Divergência:', laudo['tipo']?.toString() ?? 'N/A'),
                     _buildInfoRow('Terminal Recusa:', laudo['terminalRecusa']?.toString() ?? 'N/A'),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 20),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
                     _buildInfoRow('Resultado:', laudo['resultado']?.toString() ?? 'N/A'),
                   ],
                 ),
               ),
             ],
           ),
-          if (laudo['divergencia'] != null && laudo['divergencia'].toString().isNotEmpty)
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.SizedBox(height: 8),
-                _buildInfoRow('Descrição Divergência:', laudo['divergencia']?.toString() ?? 'N/A'),
-              ],
-            ),
           
           // Observações
           if (laudo['observacoes'] != null && laudo['observacoes'].toString().isNotEmpty)

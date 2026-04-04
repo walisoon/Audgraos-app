@@ -41,9 +41,63 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
   
   String? _odor;
   String? _sementes;
+  String? _tipoDivergencia;
   
   final List<String> _odorOptions = ['Sim', 'Não'];
   final List<String> _sementesOptions = ['Sim', 'Não'];
+  final List<String> _tipoDivergenciaOptions = ['Avariados', 'Impurezas', 'Sementes', 'Aflatoxina', 'Umidade'];
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarDadosLaudoExistente();
+  }
+
+  Future<void> _carregarDadosLaudoExistente() async {
+    // Se tem ordemNumero, está em modo de edição
+    if (widget.ordemNumero != null && widget.ordemNumero!.isNotEmpty) {
+      try {
+        // Carregar laudos existentes
+        final laudos = await StorageService.carregarLaudos();
+        
+        // Procurar o laudo pelo ID
+        final laudoExistente = laudos.firstWhere(
+          (laudo) => laudo['id'].toString() == widget.ordemNumero,
+          orElse: () => {},
+        );
+        
+        if (laudoExistente.isNotEmpty) {
+          setState(() {
+            // Carregar dados dos campos de texto
+            _origemController.text = laudoExistente['origem']?.toString() ?? '';
+            _destinoController.text = laudoExistente['destino']?.toString() ?? '';
+            _notaFiscalController.text = laudoExistente['notaFiscal']?.toString() ?? '';
+            _produtoController.text = laudoExistente['produto']?.toString() ?? '';
+            _clienteController.text = laudoExistente['cliente']?.toString() ?? '';
+            _placaController.text = laudoExistente['placa']?.toString() ?? '';
+            _terminalRecusaController.text = laudoExistente['terminalRecusa']?.toString() ?? '';
+            _resultadoController.text = laudoExistente['resultado']?.toString() ?? '';
+            _observacoesController.text = laudoExistente['observacoes']?.toString() ?? '';
+            _certificadoraController.text = laudoExistente['certificadora']?.toString() ?? '';
+            _pesoController.text = laudoExistente['peso']?.toString() ?? '';
+            _transportadoraController.text = laudoExistente['transportadora']?.toString() ?? '';
+            _nomeClassificadorController.text = laudoExistente['nomeClassificador']?.toString() ?? '';
+            
+            // Carregar dados dos dropdowns
+            _odor = laudoExistente['odor']?.toString();
+            _sementes = laudoExistente['sementes']?.toString();
+            _tipoDivergencia = laudoExistente['tipo']?.toString();
+          });
+          
+          debugPrint('=== DADOS DO LAUDO CARREGADOS ===');
+          debugPrint('Laudo ID: ${laudoExistente['id']}');
+          debugPrint('Tipo Divergência: $_tipoDivergencia');
+        }
+      } catch (e) {
+        debugPrint('Erro ao carregar laudo existente: $e');
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -84,8 +138,7 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
         'peso': _pesoController.text,
         'transportadora': _transportadoraController.text,
         'nomeClassificador': _nomeClassificadorController.text,
-        'divergencia': _divergenciaController.text,
-        'tipo': _tipoController.text,
+        'tipo': _tipoDivergencia,
         'terminalRecusa': _terminalRecusaController.text,
         'resultado': _resultadoController.text,
         
@@ -94,6 +147,10 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
         'sementes': _sementes,
         'observacoes': _observacoesController.text,
       };
+
+      debugPrint('=== DEBUG: TIPO DIVERGÊNCIA ===');
+      debugPrint('Valor de _tipoDivergencia: $_tipoDivergencia');
+      debugPrint('Valor no laudoData: ${laudoData['tipo']}');
 
       try {
         await PdfService.gerarPdfLaudo(laudoData);
@@ -131,8 +188,11 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
 
   Future<void> _salvarLaudo() async {
     if (_formKey.currentState!.validate()) {
+      // Verificar se está em modo de edição
+      final isEdicao = widget.ordemNumero != null && widget.ordemNumero!.isNotEmpty;
+      
       final laudoData = {
-        'id': '', // ID será gerado automaticamente
+        'id': isEdicao ? widget.ordemNumero : '', // ID existente ou vazio para novo
         'servico': widget.servico,
         'data': DateTime.now().toString().split(' ')[0],
         'status': 'Concluído',
@@ -148,8 +208,7 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
         'peso': _pesoController.text,
         'transportadora': _transportadoraController.text,
         'nomeClassificador': _nomeClassificadorController.text,
-        'divergencia': _divergenciaController.text,
-        'tipo': _tipoController.text,
+        'tipo': _tipoDivergencia,
         'terminalRecusa': _terminalRecusaController.text,
         'resultado': _resultadoController.text,
         
@@ -159,14 +218,25 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
         'observacoes': _observacoesController.text,
       };
 
+      debugPrint('=== DEBUG: TIPO DIVERGÊNCIA (SALVAR) ===');
+      debugPrint('Valor de _tipoDivergencia: $_tipoDivergencia');
+      debugPrint('Valor no laudoData: ${laudoData['tipo']}');
+      debugPrint('Modo de edição: $isEdicao');
+
       try {
-        // Salvar laudo no StorageService
-        debugPrint('=== SALVANDO LAUDO ===');
-        debugPrint('Dados do laudo: $laudoData');
-        await StorageService.adicionarLaudo(laudoData);
-        debugPrint('Laudo salvo com sucesso!');
+        if (isEdicao) {
+          // Atualizar laudo existente
+          debugPrint('=== ATUALIZANDO LAUDO EXISTENTE ===');
+          await StorageService.atualizarLaudo(widget.ordemNumero!, laudoData);
+          debugPrint('Laudo atualizado com sucesso!');
+        } else {
+          // Adicionar novo laudo
+          debugPrint('=== ADICIONANDO NOVO LAUDO ===');
+          await StorageService.adicionarLaudo(laudoData);
+          debugPrint('Laudo salvo com sucesso!');
+        }
         
-        // Adicionar laudo à tela de auditorias
+        // Adicionar/atualizar laudo na tela de auditorias
         AuditoriasScreen.adicionarLaudo(laudoData);
         
         // Atualizar lista de laudos automaticamente
@@ -376,8 +446,7 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
                   
                   // Divergência Identificada
                   _buildSectionCard('Divergência Identificada', [
-                    _buildTextField('Tipo', _tipoController, Icons.category),
-                    _buildTextField('Descrição', _divergenciaController, Icons.warning),
+                    _buildDropdown('Tipo', _tipoDivergencia, _tipoDivergenciaOptions, Icons.category),
                   ]),
                   
                   const SizedBox(height: 16),
@@ -649,6 +718,8 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
               _odor = value;
             } else if (label == 'Sementes') {
               _sementes = value;
+            } else if (label == 'Tipo') {
+              _tipoDivergencia = value;
             }
           });
         },
