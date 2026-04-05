@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'services/storage_service.dart';
+import 'services/supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Inicializar Supabase
+  await SupabaseService.initialize();
   
   // Carregar usuário salvo
   await AuthService.loadUserFromStorage();
   
   // Inicializar dados de exemplo
   await StorageService.inicializarDadosExemplo();
+  
+  // Inicializar usuários padrão no Supabase
+  await SupabaseService.inicializarUsuariosPadrao();
   
   runApp(const AgroClassApp());
 }

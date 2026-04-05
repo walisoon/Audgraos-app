@@ -46,10 +46,16 @@ dependencies:
   path_provider: ^2.1.1
   
   # Google Sign-In (simulado por enquanto)
-  google_sign_in: ^6.2.1
+  # google_sign_in: ^6.2.1
   
   # Compartilhamento de arquivos
   share_plus: ^7.2.1
+  
+  # HTTP para Supabase direto
+  http: ^1.1.0
+  
+  # Formatação de datas
+  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:

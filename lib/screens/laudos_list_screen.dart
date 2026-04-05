@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'classificacao_laudo_screen.dart';
 import '../services/storage_service.dart';
 import '../services/pdf_service.dart';
+import '../services/laudos_service.dart';
 
 // Timestamp para forçar reload
 final String _buildVersion = 'v2.1-${DateTime.now().millisecondsSinceEpoch}';
@@ -47,7 +48,8 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
     
     try {
       debugPrint('=== CARREGANDO LAUDOS SALVOS ===');
-      final laudos = await StorageService.carregarLaudos();
+      // Usar LaudosService que tem sincronização automática
+      final laudos = await LaudosService.carregarLaudos();
       debugPrint('Laudos carregados: ${laudos.length}');
       setState(() {
         _laudos = laudos;
@@ -62,10 +64,12 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
     }
   }
 
-  void _adicionarLaudo(Map<String, dynamic> laudo) {
-    setState(() {
-      _laudos.add(laudo);
-    });
+  void _adicionarLaudo(Map<String, dynamic> laudo) async {
+    // Adicionar usando LaudosService (com sincronização)
+    await LaudosService.adicionarLaudo(laudo);
+    
+    // Recarregar lista para pegar dados atualizados
+    _carregarLaudosSalvos();
   }
 
   Future<void> _excluirLaudo(Map<String, dynamic> laudo) async {
@@ -117,8 +121,8 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
           _laudos.removeWhere((l) => l['id'] == laudo['id']);
         });
         
-        // Remover do storage
-        await StorageService.excluirLaudo(laudo['id']);
+        // Remover usando LaudosService (com sincronização)
+        await LaudosService.excluirLaudo(laudo['id'], numeroLaudo: laudo['numero_laudo']?.toString());
         
         // Mostrar mensagem de sucesso
         ScaffoldMessenger.of(context).showSnackBar(

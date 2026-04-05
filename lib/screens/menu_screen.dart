@@ -8,6 +8,7 @@ import 'laudos_list_screen.dart';
 import 'nova_ordem_servico_screen.dart';
 import 'classificacao_laudo_screen.dart';
 import 'usuarios_screen.dart';
+import 'sync_screen.dart';
 import '../services/auth_service.dart';
 
 class MenuScreen extends StatefulWidget {
@@ -55,6 +56,12 @@ class _MenuScreenState extends State<MenuScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const UsuariosScreen()),
+        );
+        break;
+      case 'sync':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SyncScreen()),
         );
         break;
     }
@@ -260,6 +267,14 @@ List<MenuItem> get menuItems {
       color: const Color(0xFFef4444),
     ));
   }
+
+  // Adicionar opção de sincronização para todos
+  items.add(MenuItem(
+    id: 'sync',
+    title: 'Sincronizar',
+    icon: Icons.cloud_sync,
+    color: const Color(0xFF06b6d4),
+  ));
 
   return items;
 }

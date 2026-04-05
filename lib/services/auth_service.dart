@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'supabase_service.dart';
 
 class AuthService {
   static const String _userKey = 'logged_user';
@@ -254,141 +255,110 @@ class AuthService {
     }
   }
 
-  // Carregar usuários cadastrados - abordagem simplificada
+  // Carregar usuários cadastrados - agora usando Supabase
   static Future<List<Map<String, dynamic>>> carregarUsuarios() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final usuariosJson = prefs.getString('usuarios_cadastrados');
+      // Tentar carregar do Supabase primeiro
+      final usuariosSupabase = await SupabaseService.carregarUsuarios();
       
-      if (usuariosJson != null) {
-        try {
-          final List<dynamic> usuariosList = jsonDecode(usuariosJson);
-          final List<Map<String, dynamic>> usuariosFormatados = [];
-          
-          for (var item in usuariosList) {
-            if (item is Map) {
-              final Map<String, dynamic> usuarioMap = {};
-              item.forEach((key, value) {
-                usuarioMap[key.toString()] = value.toString();
-              });
-              usuariosFormatados.add(usuarioMap);
-            }
-          }
-          
-          return usuariosFormatados;
-        } catch (e) {
-          debugPrint('Erro ao decodificar JSON: $e');
-          // Se houver erro, limpar e retornar padrão
-          await prefs.remove('usuarios_cadastrados');
-        }
+      if (usuariosSupabase.isNotEmpty) {
+        return usuariosSupabase;
       }
       
-      // Retornar usuários pré-definidos como padrão
+      // Se falhar, inicializar usuários padrão no Supabase
+      await SupabaseService.inicializarUsuariosPadrao();
+      return await SupabaseService.carregarUsuarios();
+      
+    } catch (e) {
+      debugPrint('Erro ao carregar usuários do Supabase: $e');
+      // Fallback para usuários pré-definidos locais
       return _predefinedUsers.entries.map((entry) => {
         'email': entry.key,
         'senha': entry.value,
         'nome': entry.key.split('@')[0],
         'tipo': entry.key == 'admin@audgraos.com' ? 'admin' : 'auditor',
       }).toList();
-    } catch (e) {
-      debugPrint('Erro ao carregar usuários: $e');
-      return [];
     }
   }
 
-  // Adicionar novo usuário - abordagem simplificada
+  // Adicionar novo usuário - com fallback offline melhorado
   static Future<void> adicionarUsuario(String email, String senha, String nome, {String tipo = 'auditor'}) async {
     try {
-      // Limpar tudo para começar do zero
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('usuarios_cadastrados');
+      // Tentar adicionar no Supabase primeiro
+      await SupabaseService.adicionarUsuario(
+        email: email,
+        senha: senha,
+        nome: nome,
+        tipo: tipo,
+      );
       
-      // Carregar apenas usuários padrão
-      final usuarios = await carregarUsuarios();
-      
-      // Verificar se email já existe
-      if (usuarios.any((user) => user['email'] == email)) {
-        throw Exception('Email já cadastrado');
-      }
-      
-      // Criar lista simples para salvar
-      final List<Map<String, String>> listaParaSalvar = [];
-      
-      // Adicionar usuários padrão primeiro
-      for (var usuario in usuarios) {
-        listaParaSalvar.add({
-          'email': usuario['email'].toString(),
-          'senha': usuario['senha'].toString(),
-          'nome': usuario['nome'].toString(),
-          'tipo': usuario['tipo'].toString(),
-        });
-      }
-      
-      // Adicionar novo usuário
-      listaParaSalvar.add({
-        'email': email,
-        'senha': senha,
-        'nome': nome,
-        'tipo': tipo,
-      });
-      
-      // Salvar como JSON simples
-      final usuariosJson = jsonEncode(listaParaSalvar);
-      await prefs.setString('usuarios_cadastrados', usuariosJson);
-      
-      debugPrint('Usuário adicionado com sucesso: $email ($tipo)');
+      debugPrint('Usuário adicionado com sucesso no Supabase: $email ($tipo)');
     } catch (e) {
-      debugPrint('Erro ao adicionar usuário: $e');
-      rethrow;
+      debugPrint('Falha ao adicionar no Supabase, usando modo offline: $e');
+      
+      // Fallback para armazenamento local
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final usuariosJson = prefs.getString('usuarios_cadastrados');
+        
+        List<Map<String, dynamic>> usuarios = [];
+        
+        if (usuariosJson != null) {
+          final List<dynamic> usuariosList = jsonDecode(usuariosJson);
+          usuarios = usuariosList.map((item) => Map<String, dynamic>.from(item)).toList();
+        } else {
+          // Adicionar usuários padrão
+          usuarios = _predefinedUsers.entries.map((entry) => {
+            'email': entry.key,
+            'senha': entry.value,
+            'nome': entry.key.split('@')[0],
+            'tipo': entry.key == 'admin@audgraos.com' ? 'admin' : 'auditor',
+          }).toList();
+        }
+        
+        // Verificar se email já existe localmente
+        if (usuarios.any((user) => user['email'] == email)) {
+          throw Exception('Email já cadastrado');
+        }
+        
+        // Adicionar novo usuário localmente
+        usuarios.add({
+          'email': email,
+          'senha': senha,
+          'nome': nome,
+          'tipo': tipo,
+        });
+        
+        // Salvar localmente
+        final usuariosJsonAtualizado = jsonEncode(usuarios);
+        await prefs.setString('usuarios_cadastrados', usuariosJsonAtualizado);
+        
+        debugPrint('Usuário adicionado com sucesso offline: $email ($tipo)');
+      } catch (offlineError) {
+        debugPrint('Erro ao adicionar usuário offline: $offlineError');
+        rethrow;
+      }
     }
   }
 
-  // Excluir usuário
+  // Excluir usuário - agora usando Supabase
   static Future<void> excluirUsuario(String email) async {
     try {
-      final usuarios = await carregarUsuarios();
-      
-      // Remover usuário
-      usuarios.removeWhere((user) => user['email'] == email);
-      
-      // Salvar no storage
-      final prefs = await SharedPreferences.getInstance();
-      final usuariosJson = jsonEncode(usuarios);
-      await prefs.setString('usuarios_cadastrados', usuariosJson);
-      
-      debugPrint('Usuário excluído: $email');
+      await SupabaseService.excluirUsuario(email);
+      debugPrint('Usuário excluído com sucesso no Supabase: $email');
     } catch (e) {
-      debugPrint('Erro ao excluir usuário: $e');
+      debugPrint('Erro ao excluir usuário no Supabase: $e');
       rethrow;
     }
   }
 
-  // Atualizar usuário existente
+  // Atualizar usuário existente - agora usando Supabase
   static Future<void> atualizarUsuario(String emailAntigo, Map<String, dynamic> usuarioAtualizado) async {
     try {
-      final usuarios = await carregarUsuarios();
-      
-      // Encontrar o índice do usuário
-      final index = usuarios.indexWhere((user) => user['email'] == emailAntigo);
-      
-      if (index != -1) {
-        // Garantir que todos os valores sejam String antes de atualizar
-        final usuarioFormatado = usuarioAtualizado.map((key, value) => MapEntry(key, value.toString()));
-        
-        // Atualizar o usuário
-        usuarios[index] = usuarioFormatado;
-        
-        // Salvar no storage
-        final prefs = await SharedPreferences.getInstance();
-        final usuariosJson = jsonEncode(usuarios);
-        await prefs.setString('usuarios_cadastrados', usuariosJson);
-        
-        debugPrint('Usuário atualizado: ${usuarioAtualizado['email']}');
-      } else {
-        throw Exception('Usuário não encontrado');
-      }
+      await SupabaseService.atualizarUsuario(emailAntigo, usuarioAtualizado);
+      debugPrint('Usuário atualizado com sucesso no Supabase: ${usuarioAtualizado['email']}');
     } catch (e) {
-      debugPrint('Erro ao atualizar usuário: $e');
+      debugPrint('Erro ao atualizar usuário no Supabase: $e');
       rethrow;
     }
   }
