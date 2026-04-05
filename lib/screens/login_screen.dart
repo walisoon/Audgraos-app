@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -198,6 +198,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 Color(0xFF1a1f3a),
                 Color(0xFF0f172a),
               ],
+            ),
+            image: DecorationImage(
+              image: AssetImage('imagem/porto.png'),
+              fit: BoxFit.cover,
+              opacity: 0.3,
             ),
           ),
           child: Stack(
@@ -209,26 +214,26 @@ class _LoginScreenState extends State<LoginScreen> {
               SafeArea(
                 child: Center(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 20),
                         
                         // Logo e título
                         _buildLogoSection(),
                         
-                        const SizedBox(height: 60),
+                        const SizedBox(height: 16),
                         
                         // Card de login
                         _buildLoginCard(),
                         
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 20),
                         
                         // Links adicionais
                         _buildAdditionalLinks(),
                         
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 8),
                       ],
                     ),
                   ),
@@ -310,31 +315,24 @@ class _LoginScreenState extends State<LoginScreen> {
         Hero(
           tag: 'logo',
           child: Container(
-            width: 280,
-            height: 280,
+            width: 200,
+            height: 180,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Image.asset(
                 'assets/images/logo sem fundo.png',
-                width: 280,
-                height: 280,
+                width: 180,
+                height: 180,
                 fit: BoxFit.contain,
               ),
             ),
           ),
         ),
         
-        const SizedBox(height: 40),
+        const SizedBox(height: 12),
         
         Text(
           'Sistema de Auditoria de Grãos',
@@ -351,7 +349,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLoginCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(24),
@@ -387,17 +385,17 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             
-            const SizedBox(height: 32),
+            const SizedBox(height: 8),
             
             // Campo de email
             _buildEmailField(),
             
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
             
             // Campo de senha
             _buildPasswordField(),
             
-            const SizedBox(height: 24),
+            const SizedBox(height: 10),
             
             // Lembrar senha e esqueci senha
             Row(
@@ -408,7 +406,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
             
-            const SizedBox(height: 32),
+            const SizedBox(height: 6),
             
             // Botão de login
             _buildLoginButton(),
@@ -601,7 +599,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLoginButton() {
     return SizedBox(
       width: double.infinity,
-      height: 56,
+      height: 48,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _fazerLogin,
         style: ElevatedButton.styleFrom(
