@@ -317,6 +317,9 @@ class SupabaseService {
             laudoMapeado['materiasEstranhas'] = laudo['materias_estranhas'];
           }
           
+          // Marcar como sincronizado (veio do Supabase)
+          laudoMapeado['sincronizado'] = true;
+          
           return laudoMapeado;
         }).toList();
       } else {

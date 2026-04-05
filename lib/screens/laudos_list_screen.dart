@@ -65,11 +65,25 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
   }
 
   void _adicionarLaudo(Map<String, dynamic> laudo) async {
-    // Adicionar usando LaudosService (com sincronização)
-    await LaudosService.adicionarLaudo(laudo);
-    
-    // Recarregar lista para pegar dados atualizados
-    _carregarLaudosSalvos();
+    try {
+      // Adicionar usando LaudosService (com sincronização)
+      await LaudosService.adicionarLaudo(laudo);
+      
+      // Recarregar lista para pegar dados atualizados
+      await _carregarLaudosSalvos();
+      
+      // Forçar atualização da UI
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('❌ Erro ao adicionar laudo: $e');
+      // Mesmo com erro, tentar recarregar para mostrar dados locais
+      await _carregarLaudosSalvos();
+      if (mounted) {
+        setState(() {});
+      }
+    }
   }
 
   Future<void> _excluirLaudo(Map<String, dynamic> laudo) async {
@@ -116,13 +130,16 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
 
     if (confirmar == true) {
       try {
-        // Remover da lista
-        setState(() {
-          _laudos.removeWhere((l) => l['id'] == laudo['id']);
-        });
-        
         // Remover usando LaudosService (com sincronização)
         await LaudosService.excluirLaudo(laudo['id'], numeroLaudo: laudo['numero_laudo']?.toString());
+        
+        // Recarregar lista para pegar dados atualizados
+        await _carregarLaudosSalvos();
+        
+        // Forçar atualização da UI
+        if (mounted) {
+          setState(() {});
+        }
         
         // Mostrar mensagem de sucesso
         ScaffoldMessenger.of(context).showSnackBar(
@@ -139,6 +156,13 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
           ),
         );
       } catch (e) {
+        print('❌ Erro ao excluir laudo: $e');
+        // Mesmo com erro, tentar recarregar para mostrar dados atualizados
+        await _carregarLaudosSalvos();
+        if (mounted) {
+          setState(() {});
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Row(
@@ -330,12 +354,12 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
             color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -345,14 +369,14 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          minimumSize: const Size(0, 32),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20),
+            Icon(icon, size: 16),
           ],
         ),
       ),
@@ -702,9 +726,9 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                       ),
                       child: Column(
                         children: [
-                          // Header do card
+                          // Header do card com barra de sincronização integrada
                           Container(
-                            padding: const EdgeInsets.all(20),
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
@@ -718,23 +742,18 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                                 topLeft: Radius.circular(20),
                                 topRight: Radius.circular(20),
                               ),
+                              border: Border(
+                                top: BorderSide(
+                                  color: (laudo['sincronizado'] == true) 
+                                      ? Colors.green
+                                      : Colors.orange,
+                                  width: 2,
+                                ),
+                              ),
                             ),
                             child: Row(
                               children: [
-                                // Icon e ID
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF63b14a).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(
-                                    Icons.description,
-                                    color: Color(0xFF63b14a),
-                                    size: 24,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
+                                // ID (sem ícone)
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -743,16 +762,16 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                                         'Laudo ${laudo['id'] ?? 'N/A'}',
                                         style: const TextStyle(
                                           color: Colors.white,
-                                          fontSize: 18,
+                                          fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 2),
                                       Text(
                                         laudo['servico'] ?? 'N/A',
                                         style: TextStyle(
                                           color: Colors.white.withOpacity(0.7),
-                                          fontSize: 14,
+                                          fontSize: 12,
                                         ),
                                       ),
                                     ],
@@ -760,12 +779,12 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                                 ),
                                 // Status badge
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: laudo['status'] == 'Concluído' 
                                         ? Colors.green.withOpacity(0.2)
                                         : Colors.orange.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
                                       color: laudo['status'] == 'Concluído' 
                                           ? Colors.green.withOpacity(0.5)
@@ -779,19 +798,19 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                                         laudo['status'] == 'Concluído' 
                                             ? Icons.check_circle
                                             : Icons.pending,
-                                        size: 14,
+                                        size: 12,
                                         color: laudo['status'] == 'Concluído' 
                                             ? Colors.green
                                             : Colors.orange,
                                       ),
-                                      const SizedBox(width: 4),
+                                      const SizedBox(width: 3),
                                       Text(
                                         laudo['status'] ?? 'N/A',
                                         style: TextStyle(
                                           color: laudo['status'] == 'Concluído' 
                                               ? Colors.green
                                               : Colors.orange,
-                                          fontSize: 12,
+                                          fontSize: 10,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -804,71 +823,75 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                           
                           // Conteúdo principal
                           Container(
-                            padding: const EdgeInsets.all(20),
+                            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                             child: Column(
                               children: [
                                 // Data e informações básicas
                                 Row(
                                   children: [
-                                    Icon(Icons.calendar_today, size: 16, color: Colors.white.withOpacity(0.6)),
-                                    const SizedBox(width: 6),
+                                    Icon(Icons.calendar_today, size: 14, color: Colors.white.withOpacity(0.6)),
+                                    const SizedBox(width: 4),
                                     Text(
                                       laudo['data'] ?? 'N/A',
                                       style: TextStyle(
                                         color: Colors.white.withOpacity(0.8),
-                                        fontSize: 13,
+                                        fontSize: 11,
                                       ),
                                     ),
-                                    const SizedBox(width: 20),
+                                    const SizedBox(width: 16),
                                     if (laudo['cliente'] != null) ...[
-                                      Icon(Icons.person, size: 16, color: Colors.white.withOpacity(0.6)),
-                                      const SizedBox(width: 6),
+                                      Icon(Icons.person, size: 14, color: Colors.white.withOpacity(0.6)),
+                                      const SizedBox(width: 4),
                                       Text(
                                         laudo['cliente'],
                                         style: TextStyle(
                                           color: Colors.white.withOpacity(0.8),
-                                          fontSize: 13,
+                                          fontSize: 11,
                                         ),
                                       ),
                                     ],
                                   ],
                                 ),
                                 
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 4),
                                 
                                 // Informações do produto
                                 if (laudo['produto'] != null || laudo['placa'] != null)
                                   Container(
-                                    padding: const EdgeInsets.all(12),
+                                    padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
                                       color: Colors.white.withOpacity(0.05),
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Row(
                                       children: [
                                         if (laudo['produto'] != null) ...[
-                                          Icon(Icons.inventory_2, size: 16, color: const Color(0xFF63b14a)),
-                                          const SizedBox(width: 8),
+                                          Icon(Icons.inventory_2, size: 14, color: const Color(0xFF63b14a)),
+                                          const SizedBox(width: 6),
                                           Expanded(
                                             child: Text(
                                               laudo['produto'],
-                                              style: const TextStyle(
-                                                color: Color(0xFF63b14a),
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
+                                              style: TextStyle(
+                                                color: Colors.white.withOpacity(0.9),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
                                               ),
                                             ),
                                           ),
                                         ],
+                                        if (laudo['produto'] != null && laudo['placa'] != null)
+                                          const SizedBox(width: 12),
                                         if (laudo['placa'] != null) ...[
-                                          Icon(Icons.local_shipping, size: 16, color: const Color(0xFF63b14a)),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            laudo['placa'],
-                                            style: const TextStyle(
-                                              color: Color(0xFF63b14a),
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
+                                          Icon(Icons.local_shipping, size: 14, color: const Color(0xFF63b14a)),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              laudo['placa'],
+                                              style: TextStyle(
+                                                color: Colors.white.withOpacity(0.9),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -876,26 +899,116 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                                     ),
                                   ),
                                 
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 4),
                                 
-                                // Resultados
+                                // Ações
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: _buildInfoCard(
-                                        'Terminal Recusa',
-                                        laudo['terminalRecusa'] ?? 'N/A',
-                                        Icons.location_off,
-                                        Colors.orange,
+                                      child: _buildActionButton(
+                                        'PDF',
+                                        Icons.picture_as_pdf,
+                                        const Color(0xFFe74c3c),
+                                        () async {
+                                          try {
+                                            await PdfService.gerarPdfLaudo(laudo);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    Icon(Icons.check, color: Colors.white),
+                                                    SizedBox(width: 8),
+                                                    Text('PDF gerado com sucesso!'),
+                                                  ],
+                                                ),
+                                                backgroundColor: Colors.green,
+                                                duration: Duration(seconds: 3),
+                                              ),
+                                            );
+                                          } catch (e) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    Icon(Icons.error, color: Colors.white),
+                                                    SizedBox(width: 8),
+                                                    Text('Erro ao gerar PDF. Tente novamente.'),
+                                                  ],
+                                                ),
+                                                backgroundColor: Colors.red,
+                                                duration: Duration(seconds: 3),
+                                              ),
+                                            );
+                                          }
+                                        },
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 8),
                                     Expanded(
-                                      child: _buildInfoCard(
-                                        'Resultado Auditoria',
-                                        laudo['resultado'] ?? 'N/A',
-                                        Icons.assessment,
-                                        Colors.green,
+                                      child: _buildActionButton(
+                                        'Editar',
+                                        Icons.edit,
+                                        const Color(0xFF3498db),
+                                        () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => ClassificacaoLaudoScreen(
+                                                ordemNumero: laudo['id']?.toString() ?? '',
+                                                servico: laudo['servico'] ?? '',
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _buildActionButton(
+                                        'Excluir',
+                                        Icons.delete,
+                                        const Color(0xFF95a5a6),
+                                        () => _excluirLaudo(laudo),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _buildActionButton(
+                                        'Compartilhar',
+                                        Icons.share,
+                                        Colors.orange,
+                                        () async {
+                                          try {
+                                            await PdfService.salvarECompartilharPdf(laudo);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    Icon(Icons.check, color: Colors.white),
+                                                    SizedBox(width: 8),
+                                                    Text('PDF compartilhado com sucesso!'),
+                                                  ],
+                                                ),
+                                                backgroundColor: Colors.green,
+                                                duration: Duration(seconds: 3),
+                                              ),
+                                            );
+                                          } catch (e) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    Icon(Icons.error, color: Colors.white),
+                                                    SizedBox(width: 8),
+                                                    Text('Erro ao compartilhar PDF. Tente novamente.'),
+                                                  ],
+                                                ),
+                                                backgroundColor: Colors.red,
+                                                duration: Duration(seconds: 3),
+                                              ),
+                                            );
+                                          }
+                                        },
                                       ),
                                     ),
                                   ],
@@ -903,112 +1016,8 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                               ],
                             ),
                           ),
-                          
-                          // Botões de ação
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.2),
-                              borderRadius: const BorderRadius.only(
-                                bottomLeft: Radius.circular(20),
-                                bottomRight: Radius.circular(20),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _buildActionButton(
-                                    'Editar',
-                                    Icons.edit,
-                                    Colors.blue,
-                                    () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => ClassificacaoLaudoScreen(
-                                          ordemNumero: laudo['id'],
-                                          servico: laudo['servico'],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildActionButton(
-                                    'Imprimir',
-                                    Icons.print,
-                                    const Color(0xFF63b14a),
-                                    () async {
-                                      try {
-                                        await PdfService.gerarPdfLaudo(laudo);
-                                      } catch (e) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Row(
-                                              children: [
-                                                Icon(Icons.error, color: Colors.white),
-                                                SizedBox(width: 8),
-                                                Text('Erro ao gerar PDF. Tente novamente.'),
-                                              ],
-                                            ),
-                                            backgroundColor: Colors.red,
-                                            duration: Duration(seconds: 3),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildActionButton(
-                                    'Visualizar',
-                                    Icons.visibility,
-                                    Colors.purple,
-                                    () => _mostrarDetalhesLaudo(laudo),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildActionButton(
-                                    'Compartilhar',
-                                    Icons.share,
-                                    Colors.orange,
-                                    () async {
-                                      try {
-                                        await PdfService.salvarECompartilharPdf(laudo);
-                                      } catch (e) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Row(
-                                              children: [
-                                                Icon(Icons.error, color: Colors.white),
-                                                SizedBox(width: 8),
-                                                Text('Erro ao compartilhar PDF. Tente novamente.'),
-                                              ],
-                                            ),
-                                            backgroundColor: Colors.red,
-                                            duration: Duration(seconds: 3),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildActionButton(
-                                    'Excluir',
-                                    Icons.delete,
-                                    Colors.red,
-                                    () => _excluirLaudo(laudo),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         ],
-                      ),
+                      ),  
                     );
                   },
                 ),

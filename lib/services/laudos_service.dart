@@ -50,13 +50,17 @@ class LaudosService {
         laudoCompleto['status'] = 'rascunho';
       }
       
+      // Marcar como não sincronizado inicialmente
+      laudoCompleto['sincronizado'] = false;
+      
       print('Laudo completo para enviar: $laudoCompleto');
       
       // Tentar adicionar no Supabase primeiro
       print('🚀 TENTANDO ENVIAR PARA SUPABASE...');
       await SupabaseService.adicionarLaudo(laudoCompleto);
       
-      // Se sucesso, adicionar localmente também
+      // Se sucesso, marcar como sincronizado e adicionar localmente
+      laudoCompleto['sincronizado'] = true;
       print('💾 SALVANDO LOCALMENTE...');
       await _adicionarLaudoLocal(laudoCompleto);
       
@@ -82,7 +86,7 @@ class LaudosService {
       
       print('Mensagem de erro: $erroMsg');
       
-      // Fallback: salvar apenas localmente
+      // Fallback: salvar apenas localmente (já marcado como não sincronizado)
       print('💾 SALVANDO APENAS LOCALMENTE (FALLBACK)...');
       await _adicionarLaudoLocal(laudo);
       
@@ -92,8 +96,9 @@ class LaudosService {
       
       print('📱 Laudo adicionado localmente (pendente sincronização): ${laudo['numero_laudo'] ?? 'sem número'}');
       
-      // Relançar erro para mostrar na UI
-      throw Exception(erroMsg);
+      // Não relançar erro - apenas mostrar warning
+      print('⚠️ ATENÇÃO: Laudo salvo localmente, mas não sincronizado com nuvem');
+      // throw Exception(erroMsg); // ❌ COMENTADO - Não impede adição local
     }
   }
 

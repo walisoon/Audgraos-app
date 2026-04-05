@@ -120,6 +120,9 @@ class StorageService {
         debugPrint('ID gerado automaticamente: ${laudo['id']}');
       }
       
+      // Marcar como não sincronizado por padrão (salvo localmente)
+      laudo['sincronizado'] = false;
+      
       laudos.add(laudo);
       debugPrint('Total após adicionar: ${laudos.length}');
       await salvarLaudos(laudos);
