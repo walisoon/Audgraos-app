@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'auditorias_screen.dart';
 import '../services/storage_service.dart';
+import '../services/laudos_service.dart';
 import '../services/pdf_service.dart';
 import 'laudos_list_screen.dart';
+import 'laudos_copia_screen.dart';
 
 class ClassificacaoLaudoScreen extends StatefulWidget {
   final String ordemNumero;
@@ -22,7 +23,7 @@ class ClassificacaoLaudoScreen extends StatefulWidget {
 class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  // Dados da Auditoria
+  // Controllers
   final _origemController = TextEditingController();
   final _destinoController = TextEditingController();
   final _notaFiscalController = TextEditingController();
@@ -39,9 +40,16 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
   final _transportadoraController = TextEditingController();
   final _nomeClassificadorController = TextEditingController();
   
+  // Variáveis do dropdown
   String? _odor;
   String? _sementes;
   String? _tipoDivergencia;
+  
+  // Laudo existente (para edição)
+  Map<String, dynamic> _laudoExistente = {};
+  
+  // ID real do laudo carregado (para atualização correta)
+  String? _laudoIdReal;
   
   final List<String> _odorOptions = ['Sim', 'Não'];
   final List<String> _sementesOptions = ['Sim', 'Não'];
@@ -57,8 +65,11 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
     // Se tem ordemNumero, está em modo de edição
     if (widget.ordemNumero != null && widget.ordemNumero!.isNotEmpty) {
       try {
-        // Carregar laudos existentes
-        final laudos = await StorageService.carregarLaudos();
+        debugPrint('=== CARREGANDO LAUDO PARA EDIÇÃO: ${widget.ordemNumero} ===');
+        
+        // Carregar laudos existentes do serviço correto
+        final laudos = await LaudosService.carregarLaudos();
+        debugPrint('=== ${laudos.length} LAUDOS CARREGADOS PARA BUSCA ===');
         
         // Procurar o laudo pelo ID
         final laudoExistente = laudos.firstWhere(
@@ -66,7 +77,12 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
           orElse: () => {},
         );
         
+        debugPrint('=== LAUDO ENCONTRADO: ${laudoExistente.isNotEmpty} ===');
+        
         if (laudoExistente.isNotEmpty) {
+          // Guardar ID real do laudo
+          _laudoIdReal = laudoExistente['id']?.toString();
+          
           setState(() {
             // Carregar dados dos campos de texto
             _origemController.text = laudoExistente['origem']?.toString() ?? '';
@@ -76,7 +92,11 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
             _clienteController.text = laudoExistente['cliente']?.toString() ?? '';
             _placaController.text = laudoExistente['placa']?.toString() ?? '';
             _terminalRecusaController.text = laudoExistente['terminalRecusa']?.toString() ?? '';
+            debugPrint('CARREGANDO RESULTADO: "${laudoExistente['resultado']}"');
+            debugPrint('TIPO DO RESULTADO: ${laudoExistente['resultado'].runtimeType}');
+            debugPrint('É NULL: ${laudoExistente['resultado'] == null}');
             _resultadoController.text = laudoExistente['resultado']?.toString() ?? '';
+            debugPrint('RESULTADOR CONTROLLER APÓS CARREGAR: "${_resultadoController.text}"');
             _observacoesController.text = laudoExistente['observacoes']?.toString() ?? '';
             _certificadoraController.text = laudoExistente['certificadora']?.toString() ?? '';
             _pesoController.text = laudoExistente['peso']?.toString() ?? '';
@@ -99,6 +119,35 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
     }
   }
 
+  // FUNÇÃO CRÍTICA: Garantir ID correto do laudo
+  String _garantirIdLaudo(bool isEdicao) {
+    debugPrint('=== GARANTINDO ID DO LAUDO ===');
+    
+    if (isEdicao) {
+      // Em edição, priorizar o ID real carregado
+      if (_laudoIdReal != null && _laudoIdReal!.isNotEmpty) {
+        debugPrint('✅ Usando ID real carregado: $_laudoIdReal');
+        return _laudoIdReal!;
+      }
+      
+      // Fallback: usar ordemNumero se for válido (não vazio e não é o número do laudo)
+      if (widget.ordemNumero.isNotEmpty && !widget.ordemNumero.startsWith('LAU-')) {
+        debugPrint('✅ Usando ordemNumero como ID: ${widget.ordemNumero}');
+        return widget.ordemNumero;
+      }
+      
+      // Último recurso: gerar ID baseado no número do laudo
+      final idGerado = '${widget.ordemNumero}_${DateTime.now().millisecondsSinceEpoch}';
+      debugPrint('⚠️ ID gerado como último recurso: $idGerado');
+      return idGerado;
+    } else {
+      // Em criação, gerar ID único
+      final idNovo = DateTime.now().millisecondsSinceEpoch.toString();
+      debugPrint('✅ ID novo gerado: $idNovo');
+      return idNovo;
+    }
+  }
+  
   @override
   void dispose() {
     _origemController.dispose();
@@ -191,11 +240,31 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
       // Verificar se está em modo de edição
       final isEdicao = widget.ordemNumero != null && widget.ordemNumero!.isNotEmpty;
       
+      debugPrint('=== DEBUG: TIPO DIVERGÊNCIA (SALVAR) ===');
+      debugPrint('Valor de _tipoDivergencia: $_tipoDivergencia');
+      debugPrint('Modo de edição: $isEdicao');
+      debugPrint('ID real do laudo: $_laudoIdReal');
+      debugPrint('ID widget.ordemNumero: ${widget.ordemNumero}');
+      debugPrint('Resultado Controller: "${_resultadoController.text}"');
+      debugPrint('Resultado Controller trim: "${_resultadoController.text.trim()}"');
+      debugPrint('Resultado está vazio: ${_resultadoController.text.trim().isEmpty}');
+      debugPrint('Observações Controller: "${_observacoesController.text}"');
+
+      final resultadoTrim = _resultadoController.text.trim();
+      final statusFinal = resultadoTrim.isEmpty ? 'Em Andamento' : 'Concluído';
+      
+      // 🚨 FUNÇÃO CRÍTICA PARA GARANTIR ID CORRETO
+      final idGarantido = _garantirIdLaudo(isEdicao);
+      debugPrint('🔍 ID GARANTIDO: $idGarantido');
+      debugPrint('🔍 É EDIÇÃO: $isEdicao');
+      debugPrint('🔍 _laudoIdReal: $_laudoIdReal');
+      debugPrint('🔍 widget.ordemNumero: ${widget.ordemNumero}');
+      
       final laudoData = {
-        'id': isEdicao ? widget.ordemNumero : '', // ID existente ou vazio para novo
+        'id': idGarantido, // ID garantido pela função
         'servico': widget.servico,
         'data': DateTime.now().toString().split(' ')[0],
-        'status': 'Concluído',
+        'status': statusFinal,
         
         // Dados da Auditoria
         'origem': _origemController.text,
@@ -210,7 +279,7 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
         'nomeClassificador': _nomeClassificadorController.text,
         'tipo': _tipoDivergencia,
         'terminalRecusa': _terminalRecusaController.text,
-        'resultado': _resultadoController.text,
+        'resultado': resultadoTrim,
         
         // Campos mantidos
         'odor': _odor,
@@ -218,29 +287,47 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
         'observacoes': _observacoesController.text,
       };
 
-      debugPrint('=== DEBUG: TIPO DIVERGÊNCIA (SALVAR) ===');
-      debugPrint('Valor de _tipoDivergencia: $_tipoDivergencia');
-      debugPrint('Valor no laudoData: ${laudoData['tipo']}');
-      debugPrint('Modo de edição: $isEdicao');
+      debugPrint('=== DEBUG: DADOS FINAIS PARA SALVAR ===');
+      debugPrint('ID sendo usado: ${laudoData['id']}');
+      debugPrint('Status final: ${laudoData['status']}');
+      debugPrint('Resultado final: "${laudoData['resultado']}"');
+      debugPrint('Observações finais: "${laudoData['observacoes']}"');
+      debugPrint('Tipo final: ${laudoData['tipo']}');
 
       try {
         if (isEdicao) {
           // Atualizar laudo existente
           debugPrint('=== ATUALIZANDO LAUDO EXISTENTE ===');
-          await StorageService.atualizarLaudo(widget.ordemNumero!, laudoData);
+          final laudoAtualizado = await LaudosService.atualizarLaudo(_laudoIdReal ?? widget.ordemNumero!, laudoData);
           debugPrint('Laudo atualizado com sucesso!');
+          
+          // Atualizar lista na tela principal com dados retornados do serviço
+          LaudosListScreen.adicionarLaudo(laudoAtualizado);
+          
+          // Atualizar também na tela de Auditorias
+          try {
+            LaudosCopiaScreen.atualizarLaudo(laudoAtualizado);
+            debugPrint('✅ Tela de Auditorias atualizada também!');
+          } catch (e) {
+            debugPrint('⚠️ Não foi possível atualizar tela de Auditorias: $e');
+          }
         } else {
           // Adicionar novo laudo
           debugPrint('=== ADICIONANDO NOVO LAUDO ===');
-          await StorageService.adicionarLaudo(laudoData);
+          await LaudosService.adicionarLaudo(laudoData);
           debugPrint('Laudo salvo com sucesso!');
+          
+          // Atualizar lista na tela principal (apenas para novos)
+          LaudosListScreen.adicionarLaudo(laudoData);
+          
+          // Atualizar também na tela de Auditorias
+          try {
+            LaudosCopiaScreen.adicionarLaudo(laudoData);
+            debugPrint('✅ Novo laudo adicionado na tela de Auditorias também!');
+          } catch (e) {
+            debugPrint('⚠️ Não foi possível adicionar na tela de Auditorias: $e');
+          }
         }
-        
-        // Adicionar/atualizar laudo na tela de auditorias
-        AuditoriasScreen.adicionarLaudo(laudoData);
-        
-        // Atualizar lista de laudos automaticamente
-        LaudosListScreen.adicionarLaudo(laudoData);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -454,7 +541,7 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
                   // Resultados
                   _buildSectionCard('Resultados', [
                     _buildTextField('Terminal Recusa', _terminalRecusaController, Icons.block),
-                    _buildTextField('Resultado Auditoria', _resultadoController, Icons.assessment),
+                    _buildTextField('Resultado Auditoria', _resultadoController, Icons.assessment, obrigatorio: false),
                   ]),
                   
                   const SizedBox(height: 16),
@@ -658,7 +745,7 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, IconData icon) {
+  Widget _buildTextField(String label, TextEditingController controller, IconData icon, {bool obrigatorio = true}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -675,12 +762,12 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
           ),
         ),
         style: const TextStyle(color: Colors.white),
-        validator: (value) {
+        validator: obrigatorio ? (value) {
           if (value == null || value.isEmpty) {
             return 'Por favor, informe $label';
           }
           return null;
-        },
+        } : null,
       ),
     );
   }

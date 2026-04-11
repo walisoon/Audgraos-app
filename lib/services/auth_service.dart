@@ -178,14 +178,18 @@ class AuthService {
       final userJson = prefs.getString(_userKey);
       
       if (userJson != null) {
-        // Simular carregamento do usuário
+        // Carregar dados reais do usuário
+        final userData = json.decode(userJson);
         _currentUser = User(
-          uid: 'loaded_user',
-          email: 'usuario@salvo.com',
-          displayName: 'Usuário Salvo',
-          photoURL: null,
-          emailVerified: true,
+          uid: userData['uid'] ?? 'loaded_user',
+          email: userData['email'] ?? 'usuario@salvo.com',
+          displayName: userData['displayName'] ?? 'Usuário Salvo',
+          photoURL: userData['photoURL'],
+          emailVerified: userData['emailVerified'] ?? true,
         );
+        debugPrint('=== USUÁRIO CARREGADO DO STORAGE: ${_currentUser!.email} ===');
+      } else {
+        debugPrint('=== NENHUM USUÁRIO SALVO ENCONTRADO ===');
       }
     } catch (e) {
       debugPrint('Erro ao carregar usuário do storage: $e');
@@ -201,7 +205,15 @@ class AuthService {
   static Future<void> _saveUserToStorage(User user) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_userKey, 'user_data_simulated');
+      final userData = {
+        'uid': user.uid,
+        'email': user.email,
+        'displayName': user.displayName,
+        'photoURL': user.photoURL,
+        'emailVerified': user.emailVerified,
+      };
+      await prefs.setString(_userKey, json.encode(userData));
+      debugPrint('=== USUÁRIO SALVO NO STORAGE: ${user.email} ===');
     } catch (e) {
       debugPrint('Erro ao salvar usuário no storage: $e');
     }

@@ -1,14 +1,46 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'supabase_migration_service.dart';
+import 'auth_service.dart';
 
 class SupabaseService {
   static const String _supabaseUrl = 'https://oowbeehssifgizhgxgpc.supabase.co';
   static const String _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vd2JlZWhzc2lmZ2l6aGd4Z3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMzE0MjYsImV4cCI6MjA5MDkwNzQyNn0.Fqw-Yma5zP0GG1M2BGXDA1benbR84AUnWoiU_FLmyMA';
 
+  // Obter ID do usuário atual (usando AuthService)
+  static Future<String?> _getCurrentUserId() async {
+    try {
+      final currentUser = AuthService.currentUser;
+      if (currentUser != null) {
+        debugPrint('=== USUÁRIO AUTENTICADO: ${currentUser.uid} ===');
+        return currentUser.uid;
+      } else {
+        debugPrint('=== USUÁRIO NÃO AUTENTICADO ===');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('Erro ao obter ID do usuário: $e');
+      return null;
+    }
+  }
+
+  // Tabelas
+  static const String _usersTable = 'users';
+  static const String _laudosTable = 'laudos';
+  static const String _auditoriasTable = 'auditorias';
+  static const String _relatoriosTable = 'relatorios';
+
   static Future<void> initialize() async {
-    // Não precisa inicializar nada com HTTP direto
-    print('Supabase Service inicializado (HTTP direto)');
+    try {
+      print('Supabase Service inicializado (HTTP direto)');
+      
+      // Simplificado: não executar migração automática para evitar erros
+      // A coluna user_id será tratada no nível de aplicação
+      print('=== SUPABASE SERVICE INICIALIZADO (MIGRAÇÃO DESABILITADA) ===');
+    } catch (e) {
+      print('Erro na inicialização: $e');
+    }
   }
 
   // Headers padrão para requisições
@@ -18,9 +50,6 @@ class SupabaseService {
     'Content-Type': 'application/json',
     'Prefer': 'return=minimal',
   };
-
-  // Tabela de usuários
-  static const String _usersTable = 'users';
 
   // Adicionar usuário
   static Future<void> adicionarUsuario({
@@ -167,8 +196,24 @@ class SupabaseService {
     ];
   }
 
-  // Tabela de laudos
-  static const String _laudosTable = 'laudos';
+  // Buscar todos os laudos
+  static Future<List<Map<String, dynamic>>> buscarLaudos() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_supabaseUrl/rest/v1/$_laudosTable'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Erro ao buscar laudos do Supabase: $e');
+      return [];
+    }
+  }
 
   // Adicionar laudo
   static Future<void> adicionarLaudo(Map<String, dynamic> laudo) async {
@@ -184,36 +229,39 @@ class SupabaseService {
         laudo['numero_laudo'] = 'LAU-${DateTime.now().millisecondsSinceEpoch}';
       }
       
-      // Mapear campos para nomes corretos do banco
-      final Map<String, dynamic> dadosMapeados = {};
+      // Mapeamento simplificado para depuração
+      final Map<String, dynamic> dadosMapeados = {
+        'id': laudo['id']?.toString().isNotEmpty == true ? laudo['id'] : DateTime.now().millisecondsSinceEpoch,
+        'numero_laudo': laudo['numero_laudo'] ?? 'LAU-${DateTime.now().millisecondsSinceEpoch}',
+        'servico': laudo['servico'] ?? 'Serviço Padrão',
+        'data': laudo['data'] ?? DateTime.now().toString().substring(0, 10),
+        'status': laudo['status'] ?? 'rascunho',
+      };
       
-      // Mapear apenas campos que existem na tabela
-      if (laudo['id'] != null) dadosMapeados['id'] = laudo['id'];
-      if (laudo['numero_laudo'] != null) dadosMapeados['numero_laudo'] = laudo['numero_laudo'];
-      if (laudo['servico'] != null) dadosMapeados['servico'] = laudo['servico'];
-      if (laudo['data'] != null) dadosMapeados['data'] = laudo['data'];
-      if (laudo['status'] != null) dadosMapeados['status'] = laudo['status'];
-      if (laudo['origem'] != null) dadosMapeados['origem'] = laudo['origem'];
-      if (laudo['destino'] != null) dadosMapeados['destino'] = laudo['destino'];
-      if (laudo['notaFiscal'] != null) dadosMapeados['nota_fiscal'] = laudo['notaFiscal'];
-      if (laudo['produto'] != null) dadosMapeados['produto'] = laudo['produto'];
-      if (laudo['cliente'] != null) dadosMapeados['cliente'] = laudo['cliente'];
-      if (laudo['placa'] != null) dadosMapeados['placa'] = laudo['placa'];
-      if (laudo['certificadora'] != null) dadosMapeados['certificadora'] = laudo['certificadora'];
-      if (laudo['peso'] != null) dadosMapeados['peso'] = laudo['peso'];
-      if (laudo['transportadora'] != null) dadosMapeados['transportadora'] = laudo['transportadora'];
-      if (laudo['nomeClassificador'] != null) dadosMapeados['nome_classificador'] = laudo['nomeClassificador'];
-      if (laudo['tipo'] != null) dadosMapeados['tipo'] = laudo['tipo'];
-      if (laudo['terminalRecusa'] != null) dadosMapeados['terminal_recusa'] = laudo['terminalRecusa'];
-      if (laudo['resultado'] != null) dadosMapeados['resultado'] = laudo['resultado'];
-      if (laudo['odor'] != null) dadosMapeados['odor'] = laudo['odor'];
-      if (laudo['sementes'] != null) dadosMapeados['sementes'] = laudo['sementes'];
-      if (laudo['observacoes'] != null) dadosMapeados['observacoes'] = laudo['observacoes'];
-      if (laudo['umidade'] != null) dadosMapeados['umidade'] = laudo['umidade'];
-      if (laudo['materiasEstranhas'] != null) dadosMapeados['materias_estranhas'] = laudo['materiasEstranhas'];
-      if (laudo['queimados'] != null) dadosMapeados['queimados'] = laudo['queimados'];
-      if (laudo['ardidos'] != null) dadosMapeados['ardidos'] = laudo['ardidos'];
-      if (laudo['mofados'] != null) dadosMapeados['mofados'] = laudo['mofados'];
+      // Tentar adicionar ID do usuário atual (se a coluna existir)
+      final userId = await _getCurrentUserId();
+      if (userId != null) {
+        dadosMapeados['user_id'] = userId;
+        debugPrint('=== TENTANDO ADICIONAR user_id: $userId ===');
+      }
+      
+      // Adicionar campos opcionais apenas se existirem
+      if (laudo['origem']?.toString().isNotEmpty == true) dadosMapeados['origem'] = laudo['origem'];
+      if (laudo['destino']?.toString().isNotEmpty == true) dadosMapeados['destino'] = laudo['destino'];
+      if (laudo['notaFiscal']?.toString().isNotEmpty == true) dadosMapeados['nota_fiscal'] = laudo['notaFiscal'];
+      if (laudo['produto']?.toString().isNotEmpty == true) dadosMapeados['produto'] = laudo['produto'];
+      if (laudo['cliente']?.toString().isNotEmpty == true) dadosMapeados['cliente'] = laudo['cliente'];
+      if (laudo['placa']?.toString().isNotEmpty == true) dadosMapeados['placa'] = laudo['placa'];
+      if (laudo['certificadora']?.toString().isNotEmpty == true) dadosMapeados['certificadora'] = laudo['certificadora'];
+      if (laudo['peso']?.toString().isNotEmpty == true) dadosMapeados['peso'] = laudo['peso'];
+      if (laudo['transportadora']?.toString().isNotEmpty == true) dadosMapeados['transportadora'] = laudo['transportadora'];
+      if (laudo['nomeClassificador']?.toString().isNotEmpty == true) dadosMapeados['nome_classificador'] = laudo['nomeClassificador'];
+      if (laudo['tipo']?.toString().isNotEmpty == true) dadosMapeados['tipo'] = laudo['tipo'];
+      if (laudo['terminalRecusa']?.toString().isNotEmpty == true) dadosMapeados['terminal_recusa'] = laudo['terminalRecusa'];
+      if (laudo['resultado']?.toString().isNotEmpty == true) dadosMapeados['resultado'] = laudo['resultado'];
+      if (laudo['odor']?.toString().isNotEmpty == true) dadosMapeados['odor'] = laudo['odor'];
+      if (laudo['sementes']?.toString().isNotEmpty == true) dadosMapeados['sementes'] = laudo['sementes'];
+      if (laudo['observacoes']?.toString().isNotEmpty == true) dadosMapeados['observacoes'] = laudo['observacoes'];
       if (laudo['created_at'] != null) dadosMapeados['created_at'] = laudo['created_at'];
       
       print('Dados mapeados: $dadosMapeados');
@@ -246,7 +294,25 @@ class SupabaseService {
         print('🎉 SUCESSO TOTAL: Laudo adicionado no Supabase');
       } else if (response.statusCode == 400) {
         // Tentar identificar o erro específico
-        if (response.body.contains('nome_classificador')) {
+        if (response.body.contains('user_id')) {
+          print('⚠️ ERRO 400: user_id não existe na tabela, tentando sem user_id...');
+          
+          // Tentar novamente sem user_id
+          final dadosSemUserId = Map<String, dynamic>.from(dadosMapeados);
+          dadosSemUserId.remove('user_id');
+          
+          final responseRetry = await http.post(
+            Uri.parse('$_supabaseUrl/rest/v1/$_laudosTable'),
+            headers: headersComRefresh,
+            body: jsonEncode(dadosSemUserId),
+          );
+          
+          if (responseRetry.statusCode == 201) {
+            print('🎉 SUCESSO: Laudo adicionado sem user_id');
+          } else {
+            throw Exception('Erro ao adicionar laudo mesmo sem user_id: ${responseRetry.body}');
+          }
+        } else if (response.body.contains('nome_classificador')) {
           throw Exception('Erro 400 - Campo nome_classificador não existe na tabela');
         } else if (response.body.contains('certificadora')) {
           throw Exception('Erro 400 - Campo certificadora não existe na tabela');
@@ -288,9 +354,10 @@ class SupabaseService {
     }
   }
 
-  // Carregar todos os laudos
-  static Future<List<Map<String, dynamic>>> carregarLaudos() async {
+  // Carregar todos os laudos (visão global - para página cópia)
+  static Future<List<Map<String, dynamic>>> carregarTodosLaudos() async {
     try {
+      debugPrint('=== CARREGANDO TODOS OS LAUDOS DO SUPABASE ===');
       final response = await http.get(
         Uri.parse('$_supabaseUrl/rest/v1/$_laudosTable?order=created_at.desc'),
         headers: _headers,
@@ -298,37 +365,78 @@ class SupabaseService {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        
-        // Mapear dados para nomes usados no app
-        return data.map((laudo) {
-          final Map<String, dynamic> laudoMapeado = Map<String, dynamic>.from(laudo);
-          
-          // Converter nomes do banco para nomes do app
-          if (laudo.containsKey('nota_fiscal')) {
-            laudoMapeado['notaFiscal'] = laudo['nota_fiscal'];
-          }
-          if (laudo.containsKey('nome_classificador')) {
-            laudoMapeado['nomeClassificador'] = laudo['nome_classificador'];
-          }
-          if (laudo.containsKey('terminal_recusa')) {
-            laudoMapeado['terminalRecusa'] = laudo['terminal_recusa'];
-          }
-          if (laudo.containsKey('materias_estranhas')) {
-            laudoMapeado['materiasEstranhas'] = laudo['materias_estranhas'];
-          }
-          
-          // Marcar como sincronizado (veio do Supabase)
-          laudoMapeado['sincronizado'] = true;
-          
-          return laudoMapeado;
-        }).toList();
+        debugPrint('=== ${data.length} LAUDOS ENCONTRADOS NO SUPABASE ===');
+        return _mapearLaudos(data);
       } else {
-        throw Exception('Erro ao carregar laudos: ${response.body}');
+        throw Exception('Erro ao carregar todos os laudos: ${response.body}');
       }
     } catch (e) {
-      print('Erro ao carregar laudos do Supabase: $e');
+      debugPrint('Erro ao carregar todos os laudos do Supabase: $e');
       return [];
     }
+  }
+
+  // Carregar laudos do usuário atual (visão pessoal - para página original)
+  static Future<List<Map<String, dynamic>>> carregarLaudos() async {
+    try {
+      debugPrint('=== CARREGANDO LAUDOS DO USUÁRIO DO SUPABASE ===');
+      
+      // Tentar filtrar por usuário (se user_id existir)
+      final userId = await _getCurrentUserId();
+      if (userId == null) {
+        debugPrint('=== USUÁRIO NÃO AUTENTICADO ===');
+        return [];
+      }
+      
+      // Tentar carregar com filtro por user_id
+      final response = await http.get(
+        Uri.parse('$_supabaseUrl/rest/v1/$_laudosTable?user_id=eq.$userId&order=created_at.desc'),
+        headers: _headers,
+      );
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        debugPrint('=== ${data.length} LAUDOS DO USUÁRIO ENCONTRADOS ===');
+        return _mapearLaudos(data);
+      } else if (response.statusCode == 400) {
+        // Se der erro 400, provavelmente user_id não existe, carregar todos
+        debugPrint('=== ERRO 400 - user_id não existe, carregando todos ===');
+        return await carregarTodosLaudos();
+      } else {
+        debugPrint('=== ERRO INESPERADO: ${response.statusCode} ===');
+        return [];
+      }
+    } catch (e) {
+      debugPrint('Erro ao carregar laudos do usuário: $e');
+      // Fallback para carregar todos
+      return await carregarTodosLaudos();
+    }
+  }
+
+  // Método auxiliar para mapear laudos
+  static List<Map<String, dynamic>> _mapearLaudos(List<dynamic> data) {
+    return data.map((laudo) {
+      final Map<String, dynamic> laudoMapeado = Map<String, dynamic>.from(laudo);
+      
+      // Converter nomes do banco para nomes do app
+      if (laudo.containsKey('nota_fiscal')) {
+        laudoMapeado['notaFiscal'] = laudo['nota_fiscal'];
+      }
+      if (laudo.containsKey('nome_classificador')) {
+        laudoMapeado['nomeClassificador'] = laudo['nome_classificador'];
+      }
+      if (laudo.containsKey('terminal_recusa')) {
+        laudoMapeado['terminalRecusa'] = laudo['terminal_recusa'];
+      }
+      if (laudo.containsKey('materias_estranhas')) {
+        laudoMapeado['materiasEstranhas'] = laudo['materias_estranhas'];
+      }
+      
+      // Marcar como sincronizado (veio do Supabase)
+      laudoMapeado['sincronizado'] = true;
+      
+      return laudoMapeado;
+    }).toList();
   }
 
   // Excluir laudo
@@ -350,21 +458,75 @@ class SupabaseService {
   // Atualizar laudo
   static Future<void> atualizarLaudo(String id, Map<String, dynamic> dadosAtualizados) async {
     try {
+      print('=== SUPABASE: INICIANDO ATUALIZAÇÃO ===');
+      print('ID: "$id"');
+      print('ID está vazio?: ${id.isEmpty}');
+      print('ID length: ${id.length}');
+      print('Dados recebidos: $dadosAtualizados');
+      print('Resultado nos dados: ${dadosAtualizados['resultado']}');
+      print('Status nos dados: ${dadosAtualizados['status']}');
+      
+      // Mapear campos para nomes corretos do banco
+      final Map<String, dynamic> dadosMapeados = {};
+      
+      // Mapear apenas campos que existem e não estão vazios
+      if (dadosAtualizados['numero_laudo']?.toString().isNotEmpty == true) dadosMapeados['numero_laudo'] = dadosAtualizados['numero_laudo'];
+      if (dadosAtualizados['servico']?.toString().isNotEmpty == true) dadosMapeados['servico'] = dadosAtualizados['servico'];
+      if (dadosAtualizados['data']?.toString().isNotEmpty == true) dadosMapeados['data'] = dadosAtualizados['data'];
+      if (dadosAtualizados['status']?.toString().isNotEmpty == true) dadosMapeados['status'] = dadosAtualizados['status'];
+      if (dadosAtualizados['origem']?.toString().isNotEmpty == true) dadosMapeados['origem'] = dadosAtualizados['origem'];
+      if (dadosAtualizados['destino']?.toString().isNotEmpty == true) dadosMapeados['destino'] = dadosAtualizados['destino'];
+      if (dadosAtualizados['notaFiscal']?.toString().isNotEmpty == true) dadosMapeados['nota_fiscal'] = dadosAtualizados['notaFiscal'];
+      if (dadosAtualizados['produto']?.toString().isNotEmpty == true) dadosMapeados['produto'] = dadosAtualizados['produto'];
+      if (dadosAtualizados['cliente']?.toString().isNotEmpty == true) dadosMapeados['cliente'] = dadosAtualizados['cliente'];
+      if (dadosAtualizados['placa']?.toString().isNotEmpty == true) dadosMapeados['placa'] = dadosAtualizados['placa'];
+      if (dadosAtualizados['certificadora']?.toString().isNotEmpty == true) dadosMapeados['certificadora'] = dadosAtualizados['certificadora'];
+      if (dadosAtualizados['peso']?.toString().isNotEmpty == true) dadosMapeados['peso'] = dadosAtualizados['peso'];
+      if (dadosAtualizados['transportadora']?.toString().isNotEmpty == true) dadosMapeados['transportadora'] = dadosAtualizados['transportadora'];
+      if (dadosAtualizados['nomeClassificador']?.toString().isNotEmpty == true) dadosMapeados['nome_classificador'] = dadosAtualizados['nomeClassificador'];
+      if (dadosAtualizados['tipo']?.toString().isNotEmpty == true) dadosMapeados['tipo'] = dadosAtualizados['tipo'];
+      if (dadosAtualizados['terminalRecusa']?.toString().isNotEmpty == true) dadosMapeados['terminal_recusa'] = dadosAtualizados['terminalRecusa'];
+      // SEMPRE mapear resultado (mesmo que vazio/nulo)
+      if (dadosAtualizados.containsKey('resultado')) {
+        dadosMapeados['resultado'] = dadosAtualizados['resultado'];
+        if (dadosAtualizados['resultado']?.toString().isNotEmpty == true) {
+          print('✅ RESULTADO MAPEADO: "${dadosAtualizados['resultado']}"');
+        } else {
+          print('✅ RESULTADO MAPEADO (vazio/nulo): ${dadosAtualizados['resultado']}');
+        }
+      }
+      if (dadosAtualizados['odor']?.toString().isNotEmpty == true) dadosMapeados['odor'] = dadosAtualizados['odor'];
+      if (dadosAtualizados['sementes']?.toString().isNotEmpty == true) dadosMapeados['sementes'] = dadosAtualizados['sementes'];
+      if (dadosAtualizados['observacoes']?.toString().isNotEmpty == true) dadosMapeados['observacoes'] = dadosAtualizados['observacoes'];
+      
+      print('Dados mapeados para atualização: $dadosMapeados');
+      
+      // 🚨 CORREÇÃO CRÍTICA: URL sem ponto antes do ID
+      final url = '$_supabaseUrl/rest/v1/$_laudosTable?id=eq.$id';
+      print('🌐 URL COMPLETA DA REQUISIÇÃO: $url');
+      print('🔍 ID na URL: $id');
+      print('🔍 URL formatada corretamente: ${url.contains('id=eq.$id') ? 'SIM' : 'NÃO'}');
+      print('📤 BODY ENVIADO: ${jsonEncode(dadosMapeados)}');
+      
       final response = await http.patch(
-        Uri.parse('$_supabaseUrl/rest/v1/$_laudosTable?id=eq.$id'),
+        Uri.parse(url),
         headers: _headers,
-        body: jsonEncode(dadosAtualizados),
+        body: jsonEncode(dadosMapeados),
       );
+
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
 
       if (response.statusCode != 204) {
         throw Exception('Erro ao atualizar laudo: ${response.body}');
       }
+      
+      print('✅ Laudo atualizado com sucesso no Supabase');
     } catch (e) {
       throw Exception('Erro ao atualizar laudo no Supabase: $e');
     }
   }
 
-  // Verificar se laudo já existe
   static Future<bool> laudoExiste(String numeroLaudo) async {
     try {
       final response = await http.get(
@@ -373,11 +535,33 @@ class SupabaseService {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
         return data.isNotEmpty;
       }
       return false;
     } catch (e) {
+      print('Erro ao verificar se laudo existe: $e');
+      return false;
+    }
+  }
+  
+  // Verificar se laudo já existe por ID
+  static Future<bool> laudoExistePorId(String id) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_supabaseUrl/rest/v1/$_laudosTable?id=eq.$id&select=id'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final existe = data.isNotEmpty;
+        print('Verificação por ID $id: existe=$existe');
+        return existe;
+      }
+      return false;
+    } catch (e) {
+      print('Erro ao verificar se laudo existe por ID: $e');
       return false;
     }
   }
@@ -400,6 +584,90 @@ class SupabaseService {
       }
     } catch (e) {
       print('Erro ao inicializar usuários padrão: $e');
+    }
+  }
+
+  // ====== AUDITORIAS ======
+
+  // Buscar todas as auditorias
+  static Future<List<Map<String, dynamic>>> buscarAuditorias() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_supabaseUrl/rest/v1/$_auditoriasTable?select=*'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Erro ao buscar auditorias: $e');
+      return [];
+    }
+  }
+
+  // Adicionar auditoria
+  static Future<void> adicionarAuditoria(Map<String, dynamic> auditoria) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_supabaseUrl/rest/v1/$_auditoriasTable'),
+        headers: _headers,
+        body: jsonEncode({
+          ...auditoria,
+          'created_at': DateTime.now().toIso8601String(),
+        }),
+      );
+
+      if (response.statusCode != 201) {
+        throw Exception('Erro ao adicionar auditoria: ${response.body}');
+      }
+    } catch (e) {
+      print('Erro ao adicionar auditoria: $e');
+      throw e;
+    }
+  }
+
+  // ====== RELATÓRIOS ======
+
+  // Buscar todos os relatórios
+  static Future<List<Map<String, dynamic>>> buscarRelatorios() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_supabaseUrl/rest/v1/$_relatoriosTable?select=*'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Erro ao buscar relatórios: $e');
+      return [];
+    }
+  }
+
+  // Adicionar relatório
+  static Future<void> adicionarRelatorio(Map<String, dynamic> relatorio) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_supabaseUrl/rest/v1/$_relatoriosTable'),
+        headers: _headers,
+        body: jsonEncode({
+          ...relatorio,
+          'created_at': DateTime.now().toIso8601String(),
+        }),
+      );
+
+      if (response.statusCode != 201) {
+        throw Exception('Erro ao adicionar relatório: ${response.body}');
+      }
+    } catch (e) {
+      print('Erro ao adicionar relatório: $e');
+      throw e;
     }
   }
 }

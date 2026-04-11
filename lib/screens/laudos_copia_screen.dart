@@ -10,31 +10,42 @@ import '../services/laudos_global_service.dart';
 // Timestamp para forçar reload
 final String _buildVersion = 'v2.1-${DateTime.now().millisecondsSinceEpoch}';
 
-class LaudosListScreen extends StatefulWidget {
-  const LaudosListScreen({super.key});
+class LaudosCopiaScreen extends StatefulWidget {
+  const LaudosCopiaScreen({super.key});
 
   // Instância estática para acesso global
-  static _LaudosListScreenState? _instance;
+  static _LaudosCopiaScreenState? _instance;
 
   static void adicionarLaudo(Map<String, dynamic> laudo) {
-    _instance?._atualizarLaudoNaLista(laudo);
+    _instance?._adicionarLaudo(laudo);
   }
 
   static void atualizarLista() {
     _instance?._carregarLaudosSalvos();
   }
+  
+  static void atualizarLaudo(Map<String, dynamic> laudo) {
+    _instance?._atualizarLaudoNaLista(laudo);
+  }
 
   @override
-  State<LaudosListScreen> createState() {
-    final state = _LaudosListScreenState();
+  State<LaudosCopiaScreen> createState() {
+    final state = _LaudosCopiaScreenState();
     _instance = state;
     return state;
   }
 }
 
-class _LaudosListScreenState extends State<LaudosListScreen> {
+class _LaudosCopiaScreenState extends State<LaudosCopiaScreen> {
   List<Map<String, dynamic>> _laudos = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _laudosFiltrados = <Map<String, dynamic>>[];
   bool _carregando = false;
+  
+  // Controles de filtro
+  String _filtroStatus = 'todos'; // todos, concluidos, em_andamento
+  String _filtroAuditor = 'todos'; // todos, motorista1, motorista2, etc.
+  DateTime? _filtroDataInicio;
+  DateTime? _filtroDataFim;
 
   @override
   void initState() {
@@ -48,30 +59,171 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
     });
     
     try {
-      debugPrint('=== CARREGANDO LAUDOS - MODO APENAS LOCAL ===');
-      debugPrint('📱 PÁGINA LAUDOS: MODO LOCAL EXCLUSIVO (SEM SUPABASE)');
+      debugPrint('=== CARREGANDO AUDITORIAS - MODO SUPABASE EXCLUSIVO ===');
+      debugPrint('📊 PÁGINA AUDITORIAS: MODO SUPABASE APENAS (SEM DADOS LOCAIS)');
       
-      // Carregar APENAS do storage local (nunca do Supabase)
-      final laudos = await LaudosService.carregarLaudosApenasLocal();
-      debugPrint('Laudos locais carregados: ${laudos.length}');
+      // Carregar APENAS do Supabase (dados de todos os usuários)
+      final laudos = await LaudosGlobalService.carregarTodosLaudos();
+      debugPrint('✅ Laudos do Supabase carregados: ${laudos.length}');
       
       setState(() {
         _laudos = laudos;
+        _aplicarFiltros();
         _carregando = false;
       });
       
-      debugPrint('✅ Estado atualizado com ${_laudos.length} laudos (MODO LOCAL)');
+      debugPrint('✅ Estado atualizado com ${_laudos.length} laudos (MODO SUPABASE)');
     } catch (e) {
-      debugPrint('Erro ao carregar laudos locais: $e');
+      debugPrint('Erro ao carregar laudos do Supabase: $e');
       setState(() {
         _carregando = false;
+        _laudos = []; // Lista vazia se falhar
       });
     }
   }
 
+  void _aplicarFiltros() {
+    _laudosFiltrados = List.from(_laudos);
+    
+    // Filtro por status
+    if (_filtroStatus != 'todos') {
+      if (_filtroStatus == 'concluidos') {
+        _laudosFiltrados = _laudosFiltrados.where((laudo) {
+          final resultado = laudo['resultado']?.toString().trim() ?? '';
+          return resultado.isNotEmpty;
+        }).toList();
+      } else if (_filtroStatus == 'em_andamento') {
+        _laudosFiltrados = _laudosFiltrados.where((laudo) {
+          final resultado = laudo['resultado']?.toString().trim() ?? '';
+          return resultado.isEmpty;
+        }).toList();
+      }
+    }
+    
+    // Filtro por cliente
+    if (_filtroAuditor != 'todos') {
+      _laudosFiltrados = _laudosFiltrados.where((laudo) {
+        final cliente = laudo['cliente']?.toString().toLowerCase() ?? '';
+        return cliente.contains(_filtroAuditor.toLowerCase());
+      }).toList();
+    }
+    
+    // Filtro por data
+    if (_filtroDataInicio != null) {
+      _laudosFiltrados = _laudosFiltrados.where((laudo) {
+        final dataLaudo = DateTime.tryParse(laudo['data'] ?? '');
+        if (dataLaudo == null) return false;
+        return dataLaudo.isAfter(_filtroDataInicio!.subtract(const Duration(days: 1)));
+      }).toList();
+    }
+    
+    if (_filtroDataFim != null) {
+      _laudosFiltrados = _laudosFiltrados.where((laudo) {
+        final dataLaudo = DateTime.tryParse(laudo['data'] ?? '');
+        if (dataLaudo == null) return false;
+        return dataLaudo.isBefore(_filtroDataFim!.add(const Duration(days: 1)));
+      }).toList();
+    }
+    
+    debugPrint('=== FILTROS APLICADOS ===');
+    debugPrint('Status: $_filtroStatus');
+    debugPrint('Cliente: $_filtroAuditor');
+    debugPrint('Data Início: $_filtroDataInicio');
+    debugPrint('Data Fim: $_filtroDataFim');
+    debugPrint('Resultados: ${_laudosFiltrados.length}/${_laudos.length}');
+  }
+
+  List<DropdownMenuItem<String>> _getAuditoresOptions() {
+    final auditores = <String>{'todos'};
+    
+    // Coletar todos os motoristas únicos dos laudos
+    for (var laudo in _laudos) {
+      final motorista = laudo['motorista']?.toString();
+      if (motorista != null && motorista.isNotEmpty) {
+        auditores.add(motorista);
+      }
+    }
+    
+    // Converter para DropdownMenuItem
+    return auditores.map((auditor) {
+      return DropdownMenuItem<String>(
+        value: auditor,
+        child: Text(auditor == 'todos' ? 'Todos' : auditor),
+      );
+    }).toList();
+  }
+
+  List<DropdownMenuItem<String>> _getAuditoresOptionsCompact() {
+    final auditores = <String>{'todos'};
+    
+    // Coletar todos os motoristas únicos dos laudos
+    for (var laudo in _laudos) {
+      final motorista = laudo['motorista']?.toString();
+      if (motorista != null && motorista.isNotEmpty) {
+        auditores.add(motorista);
+      }
+    }
+    
+    // Converter para DropdownMenuItem compacto
+    return auditores.map((auditor) {
+      return DropdownMenuItem<String>(
+        value: auditor,
+        child: Text(
+          auditor == 'todos' ? 'Auditor' : auditor.length > 10 ? '${auditor.substring(0, 10)}...' : auditor,
+          style: const TextStyle(fontSize: 12),
+        ),
+      );
+    }).toList();
+  }
+
+  List<DropdownMenuItem<String>> _getClientesOptionsCompact() {
+    final clientes = <String>{'todos'};
+    
+    // Coletar todos os clientes únicos dos laudos
+    for (var laudo in _laudos) {
+      final cliente = laudo['cliente']?.toString();
+      if (cliente != null && cliente.isNotEmpty) {
+        clientes.add(cliente);
+      }
+    }
+    
+    // Converter para DropdownMenuItem compacto
+    return clientes.map((cliente) {
+      return DropdownMenuItem<String>(
+        value: cliente,
+        child: Text(
+          cliente == 'todos' ? 'Cliente' : cliente.length > 10 ? '${cliente.substring(0, 10)}...' : cliente,
+          style: const TextStyle(fontSize: 11),
+        ),
+      );
+    }).toList();
+  }
+
+  void _adicionarLaudo(Map<String, dynamic> laudo) async {
+    try {
+      // Adicionar usando LaudosService (com sincronização)
+      await LaudosService.adicionarLaudo(laudo);
+      
+      // Recarregar lista para pegar dados atualizados
+      await _carregarLaudosSalvos();
+      
+      // Forçar atualização da UI
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('❌ Erro ao adicionar laudo: $e');
+      // Mesmo com erro, tentar recarregar para mostrar dados locais
+      await _carregarLaudosSalvos();
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+  
   void _atualizarLaudoNaLista(Map<String, dynamic> laudo) {
     try {
-      debugPrint('=== ATUALIZANDO LAUDO NA LISTA ===');
+      debugPrint('=== ATUALIZANDO LAUDO NA LISTA DE AUDITORIAS ===');
       debugPrint('Laudo: ${laudo['numero_laudo']}');
       
       // Encontrar o índice do laudo existente
@@ -82,21 +234,23 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
       if (existingIndex != -1) {
         // Atualizar laudo existente
         _laudos[existingIndex] = laudo;
-        debugPrint('Laudo atualizado: ${laudo['numero_laudo']}');
+        debugPrint('✅ Laudo atualizado na lista de auditorias: ${laudo['numero_laudo']}');
       } else {
         // Adicionar novo laudo
         _laudos.add(laudo);
-        debugPrint('Novo laudo adicionado: ${laudo['numero_laudo']}');
+        debugPrint('✅ Novo laudo adicionado à lista de auditorias: ${laudo['numero_laudo']}');
       }
       
-      // Atualizar estado SEM recarregar do Supabase
+      // Aplicar filtros e atualizar estado
+      _aplicarFiltros();
+      
       if (mounted) {
         setState(() {});
       }
       
-      debugPrint('=== LISTA ATUALIZADA COM SUCESSO ===');
+      debugPrint('=== LISTA DE AUDITORIAS ATUALIZADA COM SUCESSO ===');
     } catch (e) {
-      debugPrint('Erro ao atualizar laudo na lista: $e');
+      debugPrint('❌ Erro ao atualizar laudo na lista de auditorias: $e');
     }
   }
 
@@ -584,63 +738,169 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
               children: [
                 // Header
                 _buildHeader(),
+              
+              // Filtros Responsivos - Cabem na tela
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Expanded(
+                    // Filtro Status
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1e293b),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      ),
+                      child: DropdownButton<String>(
+                        value: _filtroStatus,
+                        dropdownColor: const Color(0xFF1e293b),
+                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        underline: const SizedBox(),
+                        isDense: true,
+                        iconSize: 16,
+                        items: const [
+                          DropdownMenuItem(value: 'todos', child: Text('St', style: TextStyle(fontSize: 11))),
+                          DropdownMenuItem(value: 'concluidos', child: Text('Ok', style: TextStyle(fontSize: 11))),
+                          DropdownMenuItem(value: 'em_andamento', child: Text('And', style: TextStyle(fontSize: 11))),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _filtroStatus = value ?? 'todos';
+                            _aplicarFiltros();
+                          });
+                        },
+                      ),
+                    ),
+                    
+                    // Filtro Clientes
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1e293b),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      ),
+                      child: DropdownButton<String>(
+                        value: _filtroAuditor,
+                        dropdownColor: const Color(0xFF1e293b),
+                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        underline: const SizedBox(),
+                        isDense: true,
+                        iconSize: 16,
+                        items: _getClientesOptionsCompact(),
+                        onChanged: (value) {
+                          setState(() {
+                            _filtroAuditor = value ?? 'todos';
+                            _aplicarFiltros();
+                          });
+                        },
+                      ),
+                    ),
+                    
+                    // Filtro Data Início
+                    GestureDetector(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _filtroDataInicio ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (date != null) {
+                          setState(() {
+                            _filtroDataInicio = date;
+                            _aplicarFiltros();
+                          });
+                        }
+                      },
                       child: Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFF1e293b),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
-                              'Total de Laudos',
-                              style: TextStyle(color: Colors.white70, fontSize: 14),
-                            ),
-                            const SizedBox(height: 4),
+                            const Icon(Icons.calendar_today, size: 12, color: Color(0xFF63b14a)),
+                            const SizedBox(width: 2),
                             Text(
-                              '${_laudos.length}',
-                              style: const TextStyle(
-                                color: Color(0xFF63b14a),
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              _filtroDataInicio != null 
+                                  ? '${_filtroDataInicio!.day}/${_filtroDataInicio!.month}'
+                                  : 'Início',
+                              style: const TextStyle(color: Colors.white, fontSize: 10),
                             ),
                           ],
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                    
+                    // Filtro Data Fim
+                    GestureDetector(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _filtroDataFim ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (date != null) {
+                          setState(() {
+                            _filtroDataFim = date;
+                            _aplicarFiltros();
+                          });
+                        }
+                      },
                       child: Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFF1e293b),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
-                              'Concluídos',
-                              style: TextStyle(color: Colors.white70, fontSize: 14),
-                            ),
-                            const SizedBox(height: 4),
+                            const Icon(Icons.calendar_today, size: 12, color: Color(0xFF63b14a)),
+                            const SizedBox(width: 2),
                             Text(
-                              '${_laudos.where((l) => l['status'] == 'Concluído').length}',
-                              style: const TextStyle(
-                                color: Colors.green,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              _filtroDataFim != null 
+                                  ? '${_filtroDataFim!.day}/${_filtroDataFim!.month}'
+                                  : 'Fim',
+                              style: const TextStyle(color: Colors.white, fontSize: 10),
                             ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    // Botão Limpar
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _filtroStatus = 'todos';
+                          _filtroAuditor = 'todos';
+                          _filtroDataInicio = null;
+                          _filtroDataFim = null;
+                          _aplicarFiltros();
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFef4444),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.clear, size: 12, color: Colors.white),
+                            SizedBox(width: 2),
+                            Text('Limpar', style: TextStyle(color: Colors.white, fontSize: 10)),
                           ],
                         ),
                       ),
@@ -648,33 +908,13 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _novoLaudo,
-                    icon: const Icon(Icons.add, color: Colors.white),
-                    label: const Text(
-                      'Novo Laudo',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF63b14a),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _laudos.length,
+                  itemCount: _laudosFiltrados.length,
                   itemBuilder: (context, index) {
-                    final laudo = _laudos[index];
+                    final laudo = _laudosFiltrados[index];
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
@@ -856,117 +1096,46 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                                 
                                 const SizedBox(height: 4),
                                 
-                                // Ações
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildActionButton(
-                                        'PDF',
-                                        Icons.picture_as_pdf,
-                                        const Color(0xFFe74c3c),
-                                        () async {
-                                          try {
-                                            await PdfService.gerarPdfLaudo(laudo);
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Row(
-                                                  children: [
-                                                    Icon(Icons.check, color: Colors.white),
-                                                    SizedBox(width: 8),
-                                                    Text('PDF gerado com sucesso!'),
-                                                  ],
-                                                ),
-                                                backgroundColor: Colors.green,
-                                                duration: Duration(seconds: 3),
-                                              ),
-                                            );
-                                          } catch (e) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Row(
-                                                  children: [
-                                                    Icon(Icons.error, color: Colors.white),
-                                                    SizedBox(width: 8),
-                                                    Text('Erro ao gerar PDF. Tente novamente.'),
-                                                  ],
-                                                ),
-                                                backgroundColor: Colors.red,
-                                                duration: Duration(seconds: 3),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: _buildActionButton(
-                                        'Editar',
-                                        Icons.edit,
-                                        const Color(0xFF3498db),
-                                        () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => ClassificacaoLaudoScreen(
-                                                ordemNumero: laudo['id']?.toString() ?? '',
-                                                servico: laudo['servico'] ?? '',
-                                              ),
+                                // Ação - Apenas PDF
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: _buildActionButton(
+                                    'Gerar PDF',
+                                    Icons.picture_as_pdf,
+                                    const Color(0xFFe74c3c),
+                                    () async {
+                                      try {
+                                        await PdfService.gerarPdfLaudo(laudo);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Row(
+                                              children: [
+                                                Icon(Icons.check, color: Colors.white),
+                                                SizedBox(width: 8),
+                                                Text('PDF gerado com sucesso!'),
+                                              ],
                                             ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: _buildActionButton(
-                                        'Excluir',
-                                        Icons.delete,
-                                        const Color(0xFF95a5a6),
-                                        () => _excluirLaudo(laudo),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: _buildActionButton(
-                                        'Compartilhar',
-                                        Icons.share,
-                                        Colors.orange,
-                                        () async {
-                                          try {
-                                            await PdfService.salvarECompartilharPdf(laudo);
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Row(
-                                                  children: [
-                                                    Icon(Icons.check, color: Colors.white),
-                                                    SizedBox(width: 8),
-                                                    Text('PDF compartilhado com sucesso!'),
-                                                  ],
-                                                ),
-                                                backgroundColor: Colors.green,
-                                                duration: Duration(seconds: 3),
-                                              ),
-                                            );
-                                          } catch (e) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Row(
-                                                  children: [
-                                                    Icon(Icons.error, color: Colors.white),
-                                                    SizedBox(width: 8),
-                                                    Text('Erro ao compartilhar PDF. Tente novamente.'),
-                                                  ],
-                                                ),
-                                                backgroundColor: Colors.red,
-                                                duration: Duration(seconds: 3),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                  ],
+                                            backgroundColor: Colors.green,
+                                            duration: Duration(seconds: 3),
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Row(
+                                              children: [
+                                                Icon(Icons.error, color: Colors.white),
+                                                SizedBox(width: 8),
+                                                Text('Erro ao gerar PDF. Tente novamente.'),
+                                              ],
+                                            ),
+                                            backgroundColor: Colors.red,
+                                            duration: Duration(seconds: 3),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
                                 ),
                               ],
                             ),
@@ -985,19 +1154,9 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
     );
   }
 
-  // Método para determinar o texto do status
+  // Método para determinar o status baseado no campo resultado
   String _getStatusText(Map<String, dynamic> laudo) {
-    final resultado = laudo['resultado'];
-    final resultadoStr = resultado?.toString() ?? '';
-    final isEmpty = resultadoStr.trim().isEmpty;
-    
-    debugPrint('=== VERIFICANDO STATUS ===');
-    debugPrint('Laudo ID: ${laudo['id']}');
-    debugPrint('Resultado: "$resultadoStr"');
-    debugPrint('Está vazio: $isEmpty');
-    debugPrint('Status: ${isEmpty ? "Em Andamento" : "Concluída"}');
-    
-    if (isEmpty) {
+    if (laudo['resultado'] == null || laudo['resultado'].toString().trim().isEmpty) {
       return 'Em Andamento';
     } else {
       return 'Concluída';
@@ -1031,39 +1190,13 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-          IconButton(
-            onPressed: () async {
-              await LaudosService.debugCompletoStorage();
-            },
-            icon: const Icon(Icons.bug_report, color: Colors.white),
-            tooltip: 'Debug Storage',
-          ),
-          IconButton(
-            onPressed: () async {
-              await LaudosService.sincronizarComSupabase();
-              _carregarLaudosSalvos();
-            },
-            icon: const Icon(Icons.sync, color: Colors.white),
-            tooltip: 'Sincronizar com Supabase',
-          ),
-          IconButton(
-            onPressed: () async {
-              debugPrint('=== FORÇANDO SINCRONIZAÇÃO COM SUPABASE ===');
-              await LaudosService.limparLaudosComIdVazio();
-              await LaudosService.sincronizarDadosLocaisComSupabase();
-              _carregarLaudosSalvos();
-              debugPrint('=== SINCRONIZAÇÃO FORÇADA CONCLUÍDA ===');
-            },
-            icon: const Icon(Icons.bug_report, color: Colors.red),
-            tooltip: 'Forçar Sincronização',
-          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Laudos de Clientes',
+                  'Auditorias',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -1071,7 +1204,7 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                   ),
                 ),
                 Text(
-                  'Seus laudos: ${_laudos.length}',
+                  'Todas as auditorias: ${_laudos.length}',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFFcbd5e1),
@@ -1087,7 +1220,7 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
             ),
             padding: const EdgeInsets.all(8),
             child: const Icon(
-              Icons.description,
+              Icons.assessment,
               color: Color(0xFF63b14a),
               size: 24,
             ),

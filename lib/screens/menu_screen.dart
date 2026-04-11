@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 
 import 'clientes_list_screen.dart';
 import 'ordens_servico_screen.dart';
-import 'auditorias_screen.dart';
 import 'laudos_list_screen.dart';
+import 'laudos_copia_screen.dart';
 import 'nova_ordem_servico_screen.dart';
 import 'classificacao_laudo_screen.dart';
 import 'usuarios_screen.dart';
@@ -40,16 +40,16 @@ class _MenuScreenState extends State<MenuScreen> {
           MaterialPageRoute(builder: (context) => const ClientesListScreen()),
         );
         break;
-      case 'auditorias':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AuditoriasScreen()),
-        );
-        break;
-      case 'laudos':
+            case 'laudos':
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const LaudosListScreen()),
+        );
+        break;
+      case 'laudos_copia':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const LaudosCopiaScreen()),
         );
         break;
       case 'usuarios':
@@ -244,17 +244,17 @@ List<MenuItem> get menuItems {
       icon: Icons.people,
       color: const Color(0xFF3b82f6),
     ),
-    MenuItem(
-      id: 'auditorias',
-      title: 'Auditorias',
-      icon: Icons.analytics,
-      color: const Color(0xFF8b5cf6),
-    ),
-    MenuItem(
+        MenuItem(
       id: 'laudos',
       title: 'Laudos',
       icon: Icons.description,
       color: const Color(0xFFf59e0b),
+    ),
+    MenuItem(
+      id: 'laudos_copia',
+      title: 'Auditorias',
+      icon: Icons.assessment,
+      color: const Color(0xFF8b5cf6),
     ),
   ];
 

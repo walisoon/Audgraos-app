@@ -6,11 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'supabase_service.dart';
 
 class StorageService {
   static const String _ordensServicoKey = 'ordens_servico';
   static const String _laudosKey = 'laudos';
   static const String _clientesKey = 'clientes';
+  static const String _auditoriasKey = 'auditorias';
+  static const String _relatoriosKey = 'relatorios';
 
   // Salvar ordens de serviço
   static Future<void> salvarOrdensServico(List<Map<String, dynamic>> ordens) async {
@@ -65,16 +68,42 @@ class StorageService {
   // Carregar laudos
   static Future<List<Map<String, dynamic>>> carregarLaudos() async {
     try {
+      debugPrint('=== STORAGE: CARREGANDO LAUDOS DO SUPABASE ===');
+      // Tentar buscar do Supabase primeiro
+      final laudosSupabase = await SupabaseService.buscarLaudos();
+      debugPrint('=== STORAGE: LAUDOS DO SUPABASE: ${laudosSupabase.length} ===');
+      if (laudosSupabase.isNotEmpty) {
+        debugPrint('=== STORAGE: USANDO DADOS DO SUPABASE ===');
+        return laudosSupabase;
+      }
+      
+      debugPrint('=== STORAGE: SUPABASE VAZIO, USANDO STORAGE LOCAL ===');
+      // Fallback para storage local
       final prefs = await SharedPreferences.getInstance();
       final laudosJson = prefs.getString(_laudosKey);
       
       if (laudosJson != null) {
         final List<dynamic> laudosList = jsonDecode(laudosJson);
+        debugPrint('=== STORAGE: LAUDOS LOCAIS: ${laudosList.length} ===');
         return laudosList.cast<Map<String, dynamic>>();
       }
+      debugPrint('=== STORAGE: NENHUM LAUDO ENCONTRADO ===');
       return [];
     } catch (e) {
-      print('Erro ao carregar laudos: $e');
+      debugPrint('=== STORAGE: ERRO AO CARREGAR LAUDOS: $e ===');
+      // Fallback para storage local
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final laudosJson = prefs.getString(_laudosKey);
+        
+        if (laudosJson != null) {
+          final List<dynamic> laudosList = jsonDecode(laudosJson);
+          debugPrint('=== STORAGE: FALLBACK LOCAL: ${laudosList.length} LAUDOS ===');
+          return laudosList.cast<Map<String, dynamic>>();
+        }
+      } catch (localError) {
+        debugPrint('=== STORAGE: ERRO NO FALLBACK LOCAL: $localError ===');
+      }
       return [];
     }
   }
@@ -111,8 +140,6 @@ class StorageService {
   static Future<void> adicionarLaudo(Map<String, dynamic> laudo) async {
     try {
       debugPrint('=== STORAGE: ADICIONANDO LAUDO ===');
-      final laudos = await carregarLaudos();
-      debugPrint('Laudos existentes: ${laudos.length}');
       
       // Gerar ID automático se não existir
       if (laudo['id'] == null || laudo['id'].toString().isEmpty) {
@@ -120,16 +147,23 @@ class StorageService {
         debugPrint('ID gerado automaticamente: ${laudo['id']}');
       }
       
-      // Marcar como não sincronizado por padrão (salvo localmente)
-      laudo['sincronizado'] = false;
-      
-      laudos.add(laudo);
-      debugPrint('Total após adicionar: ${laudos.length}');
-      await salvarLaudos(laudos);
-      debugPrint('Laudo salvo no storage!');
+      // Tentar salvar no Supabase primeiro
+      try {
+        await SupabaseService.adicionarLaudo(laudo);
+        debugPrint('Laudo salvo no Supabase: ${laudo['id']}');
+        laudo['sincronizado'] = true;
+      } catch (supabaseError) {
+        debugPrint('Erro ao salvar no Supabase, usando fallback local: $supabaseError');
+        // Fallback para storage local
+        final laudos = await carregarLaudos();
+        laudo['sincronizado'] = false;
+        laudos.add(laudo);
+        await salvarLaudos(laudos);
+        debugPrint('Laudo salvo localmente: ${laudo['id']}');
+      }
     } catch (e) {
       debugPrint('Erro ao adicionar laudo: $e');
-      print('Erro ao adicionar laudo: $e');
+      throw e;
     }
   }
 
@@ -508,6 +542,230 @@ class StorageService {
       print('Aplicativo iniciado sem dados de exemplo');
     } catch (e) {
       print('Erro ao inicializar dados: $e');
+    }
+  }
+
+  // ====== AUDITORIAS E RELATÓRIOS ======
+
+  // Salvar auditorias
+  static Future<void> salvarAuditorias(List<Map<String, dynamic>> auditorias) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final auditoriasJson = jsonEncode(auditorias);
+      await prefs.setString(_auditoriasKey, auditoriasJson);
+      print('Auditorias salvas: ${auditorias.length}');
+    } catch (e) {
+      print('Erro ao salvar auditorias: $e');
+    }
+  }
+
+  // Carregar auditorias
+  static Future<List<Map<String, dynamic>>> carregarAuditorias() async {
+    try {
+      // Tentar buscar do Supabase primeiro
+      final auditoriasSupabase = await SupabaseService.buscarAuditorias();
+      if (auditoriasSupabase.isNotEmpty) {
+        return auditoriasSupabase;
+      }
+      
+      // Fallback para storage local
+      final prefs = await SharedPreferences.getInstance();
+      final auditoriasJson = prefs.getString(_auditoriasKey);
+      
+      if (auditoriasJson != null) {
+        final List<dynamic> auditoriasList = jsonDecode(auditoriasJson);
+        return auditoriasList.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Erro ao carregar auditorias: $e');
+      // Fallback para storage local
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final auditoriasJson = prefs.getString(_auditoriasKey);
+        
+        if (auditoriasJson != null) {
+          final List<dynamic> auditoriasList = jsonDecode(auditoriasJson);
+          return auditoriasList.cast<Map<String, dynamic>>();
+        }
+      } catch (localError) {
+        print('Erro no fallback local: $localError');
+      }
+      return [];
+    }
+  }
+
+  // Adicionar nova auditoria
+  static Future<void> adicionarAuditoria(Map<String, dynamic> auditoria) async {
+    try {
+      // Tentar salvar no Supabase primeiro
+      await SupabaseService.adicionarAuditoria(auditoria);
+      print('Auditoria salva no Supabase: ${auditoria['codigo']}');
+    } catch (e) {
+      print('Erro ao salvar no Supabase, usando fallback local: $e');
+      // Fallback para storage local
+      try {
+        final auditorias = await carregarAuditorias();
+        auditorias.add(auditoria);
+        await salvarAuditorias(auditorias);
+      } catch (localError) {
+        print('Erro no fallback local: $localError');
+        throw localError;
+      }
+    }
+  }
+
+  // Salvar relatórios
+  static Future<void> salvarRelatorios(List<Map<String, dynamic>> relatorios) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final relatoriosJson = jsonEncode(relatorios);
+      await prefs.setString(_relatoriosKey, relatoriosJson);
+      print('Relatórios salvos: ${relatorios.length}');
+    } catch (e) {
+      print('Erro ao salvar relatórios: $e');
+    }
+  }
+
+  // Carregar relatórios
+  static Future<List<Map<String, dynamic>>> carregarRelatorios() async {
+    try {
+      // Tentar buscar do Supabase primeiro
+      final relatoriosSupabase = await SupabaseService.buscarRelatorios();
+      if (relatoriosSupabase.isNotEmpty) {
+        return relatoriosSupabase;
+      }
+      
+      // Fallback para storage local
+      final prefs = await SharedPreferences.getInstance();
+      final relatoriosJson = prefs.getString(_relatoriosKey);
+      
+      if (relatoriosJson != null) {
+        final List<dynamic> relatoriosList = jsonDecode(relatoriosJson);
+        return relatoriosList.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Erro ao carregar relatórios: $e');
+      // Fallback para storage local
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final relatoriosJson = prefs.getString(_relatoriosKey);
+        
+        if (relatoriosJson != null) {
+          final List<dynamic> relatoriosList = jsonDecode(relatoriosJson);
+          return relatoriosList.cast<Map<String, dynamic>>();
+        }
+      } catch (localError) {
+        print('Erro no fallback local: $localError');
+      }
+      return [];
+    }
+  }
+
+  // Gerar relatório de auditoria
+  static Future<void> gerarRelatorioAuditoria(Map<String, dynamic> auditoria) async {
+    try {
+      final relatorios = await carregarRelatorios();
+      
+      // Criar relatório
+      final relatorio = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'auditoria_codigo': auditoria['codigo'],
+        'auditoria_titulo': auditoria['titulo'],
+        'auditor': auditoria['auditor'],
+        'data_geracao': DateTime.now().toIso8601String(),
+        'tipo': 'auditoria',
+        'status': auditoria['status'],
+        'pontuacao': auditoria['pontuacao'],
+        'nao_conformidades': auditoria['naoConformidades'],
+        'area': auditoria['area'],
+        'findings': auditoria['findings'] ?? [],
+        'recomendacoes': auditoria['recomendacoes'] ?? [],
+      };
+      
+      relatorios.add(relatorio);
+      await salvarRelatorios(relatorios);
+      
+      print('Relatório gerado para auditoria: ${auditoria['codigo']}');
+    } catch (e) {
+      print('Erro ao gerar relatório: $e');
+    }
+  }
+
+  // Gerar relatório de laudo (lançamento de auditoria)
+  static Future<void> gerarRelatorioLaudo(Map<String, dynamic> laudo) async {
+    try {
+      final relatorios = await carregarRelatorios();
+      
+      // Lógica de status baseada no campo resultado
+      String statusLaudo;
+      if (laudo['resultado'] == null || 
+          laudo['resultado'].toString().trim().isEmpty) {
+        statusLaudo = 'em_andamento';
+      } else {
+        statusLaudo = 'concluida';
+      }
+      
+      // Criar lançamento de auditoria a partir do laudo
+      final lancamento = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'laudo_id': laudo['id'],
+        'laudo_servico': laudo['servico'],
+        'laudo_data': laudo['data'],
+        'laudo_status': statusLaudo,
+        'auditoria_codigo': 'LAUDO-${laudo['id']}',
+        'auditoria_titulo': 'Laudo: ${laudo['servico']}',
+        'auditor': laudo['auditor'] ?? 'Usuário',
+        'data_geracao': DateTime.now().toIso8601String(),
+        'tipo': 'laudo_auditoria',
+        'status': statusLaudo,
+        'pontuacao': laudo['pontuacao'] ?? 0.0,
+        'nao_conformidades': laudo['naoConformidades'] ?? 0,
+        'area': laudo['area'] ?? 'Laudo',
+        'findings': laudo['findings'] ?? ['Laudo gerado pelo usuário'],
+        'recomendacoes': laudo['recomendacoes'] ?? ['Analisar laudo detalhadamente'],
+        'descricao': 'Lançamento automático a partir do laudo ${laudo['id']}',
+        'data_lancamento': DateTime.now().toIso8601String(),
+        'usuario': 'sistema',
+      };
+      
+      relatorios.add(lancamento);
+      await salvarRelatorios(relatorios);
+      
+      print('Lançamento de auditoria gerado a partir do laudo: ${laudo['id']}');
+    } catch (e) {
+      print('Erro ao gerar lançamento de laudo: $e');
+    }
+  }
+
+  // Adicionar lançamento (para todos os usuários)
+  static Future<void> adicionarLancamento(Map<String, dynamic> lancamento) async {
+    try {
+      // Tentar salvar no Supabase primeiro
+      await SupabaseService.adicionarRelatorio(lancamento);
+      print('Lançamento salvo no Supabase: ${lancamento['id']}');
+    } catch (e) {
+      print('Erro ao salvar no Supabase, usando fallback local: $e');
+      // Fallback para storage local
+      try {
+        final relatorios = await carregarRelatorios();
+        
+        // Criar lançamento com ID único
+        final lancamentoComId = {
+          ...lancamento,
+          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+          'data_lancamento': DateTime.now().toIso8601String(),
+          'usuario': 'sistema', // Pode ser alterado para usuário atual
+        };
+        
+        relatorios.add(lancamentoComId);
+        await salvarRelatorios(relatorios);
+        print('Lançamento salvo localmente: ${lancamentoComId['id']}');
+      } catch (localError) {
+        print('Erro no fallback local: $localError');
+        throw localError;
+      }
     }
   }
 }
