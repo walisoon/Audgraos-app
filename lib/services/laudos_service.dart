@@ -5,6 +5,8 @@ import 'supabase_service.dart';
 import 'auth_service.dart';
 
 class LaudosService {
+  static VoidCallback? onLaudosAtualizados;
+
   static const String _laudosKey = 'laudos_cadastrados';
   
   // Obter chave específica do usuário
@@ -179,9 +181,19 @@ class LaudosService {
       
       // 2. ENVIAR PARA SUPABASE DE FORMA SÍNCRONA COM FEEDBACK
       debugPrint('📤 ENVIANDO PARA O SUPABASE (AGUARDANDO RESPOSTA)...');
-      
+
       try {
-        await SupabaseService.atualizarLaudo(id, dadosAtualizados);
+        final laudosLocais = await _carregarLaudosLocal();
+        final laudoParaEnvio = {
+          'id': id,
+          ...dadosAtualizados,
+          'numero_laudo': laudosLocais.firstWhere(
+            (l) => l['id'].toString() == id,
+            orElse: () => {'numero_laudo': 'LAU-${DateTime.now().millisecondsSinceEpoch}'},
+          )['numero_laudo'],
+        };
+
+        await SupabaseService.atualizarLaudo(id, laudoParaEnvio);
         debugPrint('✅ Dados enviados com sucesso para o Supabase: $id');
         
         // Marcar como sincronizado se sucesso
@@ -283,7 +295,14 @@ class LaudosService {
       laudoCompleto['ardidos'] = laudoCompleto['ardidos'] ?? '';
       laudoCompleto['mofados'] = laudoCompleto['mofados'] ?? '';
       
-      laudos.add(laudoCompleto);
+      final existingIndex = laudos.indexWhere(
+        (item) => item['id'].toString() == laudoCompleto['id'].toString(),
+      );
+      if (existingIndex >= 0) {
+        laudos[existingIndex] = laudoCompleto;
+      } else {
+        laudos.add(laudoCompleto);
+      }
       await _salvarLaudosLocal(laudos);
       
       print('Laudo salvo localmente com todos os campos: ${laudoCompleto.keys.toList()}');
@@ -366,6 +385,7 @@ class LaudosService {
         await prefs.setString(userKey, jsonEncode(laudos));
         
         debugPrint('✅ Laudo $id marcado como sincronizado localmente');
+        onLaudosAtualizados?.call();
       }
     } catch (e) {
       debugPrint('Erro ao marcar laudo como sincronizado: $e');
@@ -626,42 +646,11 @@ class LaudosService {
       // 1. Primeiro sincronizar dados locais com Supabase
       await sincronizarDadosLocaisComSupabase();
       
-      // 2. Depois carregar dados do Supabase para mesclar
-      final laudosSupabase = await SupabaseService.carregarLaudos();
-      debugPrint('Laudos do Supabase: ${laudosSupabase.length}');
-      
-      // 3. Carregar dados locais
       final laudosLocais = await _carregarLaudosLocal();
       debugPrint('Laudos locais: ${laudosLocais.length}');
       
-      // 4. Mesclar dados (prioridade para dados locais mais recentes)
-      final laudosMesclados = <Map<String, dynamic>>[];
-      
-      // Adicionar todos os laudos locais
-      for (final laudoLocal in laudosLocais) {
-        final idLocal = laudoLocal['id'].toString();
-        final laudoSupabase = laudosSupabase.firstWhere(
-          (l) => l['id'].toString() == idLocal,
-          orElse: () => laudoLocal,
-        );
-        
-        // SEMPRE usar dados locais (são os mais recentes)
-        laudosMesclados.add(laudoLocal);
-        debugPrint('Mantendo dados locais: ${laudoLocal['numero_laudo']}');
-      }
-      
-      // 5. Adicionar laudos que existem apenas no Supabase
-      for (final laudoSupabase in laudosSupabase) {
-        final idSupabase = laudoSupabase['id'].toString();
-        if (!laudosLocais.any((l) => l['id'].toString() == idSupabase)) {
-          laudosMesclados.add(laudoSupabase);
-          debugPrint('Adicionando laudo do Supabase: ${laudoSupabase['numero_laudo']}');
-        }
-      }
-      
-      // 6. Salvar dados mesclados localmente
-      await _salvarLaudosLocal(laudosMesclados);
-      debugPrint('Sincronização concluída: ${laudosMesclados.length} laudos');
+      await _salvarLaudosLocal(laudosLocais);
+      debugPrint('Sincronização concluída: ${laudosLocais.length} laudos');
       
     } catch (e) {
       debugPrint('Erro na sincronização: $e');

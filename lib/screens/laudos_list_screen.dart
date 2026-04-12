@@ -40,6 +40,19 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
   void initState() {
     super.initState();
     _carregarLaudosSalvos();
+    LaudosService.onLaudosAtualizados = () {
+      if (mounted) {
+        _carregarLaudosSalvos();
+      }
+    };
+  }
+
+  @override
+  void dispose() {
+    if (LaudosService.onLaudosAtualizados == _carregarLaudosSalvos) {
+      LaudosService.onLaudosAtualizados = null;
+    }
+    super.dispose();
   }
 
   Future<void> _carregarLaudosSalvos() async {
@@ -369,9 +382,12 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
           children: [
             Icon(icon, size: 12, color: color),
             const SizedBox(width: 3),
-            Text(
-              label,
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: color),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: color),
+              ),
             ),
           ],
         ),
@@ -805,6 +821,18 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
                                         ),
                                       ),
                                     ],
+                                    if (laudo['certificadora'] != null) ...[
+                                      const SizedBox(width: 12),
+                                      Icon(Icons.verified, size: 14, color: Colors.white.withOpacity(0.6)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        laudo['certificadora'],
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.8),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                                 
@@ -1031,33 +1059,7 @@ class _LaudosListScreenState extends State<LaudosListScreen> {
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-          IconButton(
-            onPressed: () async {
-              await LaudosService.debugCompletoStorage();
-            },
-            icon: const Icon(Icons.bug_report, color: Colors.white),
-            tooltip: 'Debug Storage',
-          ),
-          IconButton(
-            onPressed: () async {
-              await LaudosService.sincronizarComSupabase();
-              _carregarLaudosSalvos();
-            },
-            icon: const Icon(Icons.sync, color: Colors.white),
-            tooltip: 'Sincronizar com Supabase',
-          ),
-          IconButton(
-            onPressed: () async {
-              debugPrint('=== FORÇANDO SINCRONIZAÇÃO COM SUPABASE ===');
-              await LaudosService.limparLaudosComIdVazio();
-              await LaudosService.sincronizarDadosLocaisComSupabase();
-              _carregarLaudosSalvos();
-              debugPrint('=== SINCRONIZAÇÃO FORÇADA CONCLUÍDA ===');
-            },
-            icon: const Icon(Icons.bug_report, color: Colors.red),
-            tooltip: 'Forçar Sincronização',
-          ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

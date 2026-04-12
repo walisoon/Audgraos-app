@@ -21,50 +21,48 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> {
   String selectedItem = '';
 
-  void handleMenuPress(String itemId) {
+  Future<void> _navigateTo(Widget page) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => page),
+    );
+  }
+
+  Future<void> handleMenuPress(String itemId) async {
     setState(() {
       selectedItem = itemId;
     });
 
-    // Navigate based on selected item
+    Widget? page;
     switch (itemId) {
       case 'ordens':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const OrdensServicoScreen()),
-        );
+        page = const OrdensServicoScreen();
         break;
       case 'clientes':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const ClientesListScreen()),
-        );
+        page = const ClientesListScreen();
         break;
-            case 'laudos':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const LaudosListScreen()),
-        );
+      case 'laudos':
+        page = const LaudosListScreen();
         break;
       case 'laudos_copia':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const LaudosCopiaScreen()),
-        );
+        page = const LaudosCopiaScreen();
         break;
       case 'usuarios':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const UsuariosScreen()),
-        );
+        page = const UsuariosScreen();
         break;
       case 'sync':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const SyncScreen()),
-        );
+        page = const SyncScreen();
         break;
     }
+
+    if (page != null) {
+      await _navigateTo(page);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      selectedItem = '';
+    });
   }
 
   @override

@@ -750,7 +750,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        entry.key == 'admin@audgraos.com' ? 'Administrador' : 'Usuário',
+                        entry.key == 'jailson@audgraos.com' ? 'Administrador' : 'Usuário',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF63b14a),

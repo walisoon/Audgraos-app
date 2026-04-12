@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/storage_service.dart';
 import '../services/laudos_service.dart';
 import '../services/pdf_service.dart';
+import '../services/supabase_service.dart';
 import 'laudos_list_screen.dart';
 import 'laudos_copia_screen.dart';
 
@@ -65,26 +66,35 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
     // Se tem ordemNumero, está em modo de edição
     if (widget.ordemNumero != null && widget.ordemNumero!.isNotEmpty) {
       try {
-        debugPrint('=== CARREGANDO LAUDO PARA EDIÇÃO: ${widget.ordemNumero} ===');
+        final searchKey = widget.ordemNumero!.trim();
+        debugPrint('=== CARREGANDO LAUDO PARA EDIÇÃO: $searchKey ===');
         
-        // Carregar laudos existentes do serviço correto
         final laudos = await LaudosService.carregarLaudos();
         debugPrint('=== ${laudos.length} LAUDOS CARREGADOS PARA BUSCA ===');
         
-        // Procurar o laudo pelo ID
-        final laudoExistente = laudos.firstWhere(
-          (laudo) => laudo['id'].toString() == widget.ordemNumero,
+        Map<String, dynamic> laudoExistente = laudos.firstWhere(
+          (laudo) {
+            final laudoId = laudo['id']?.toString().trim() ?? '';
+            final numeroLaudo = laudo['numero_laudo']?.toString().trim() ?? '';
+            return laudoId == searchKey || numeroLaudo == searchKey;
+          },
           orElse: () => {},
         );
         
+        if (laudoExistente.isEmpty && searchKey.isNotEmpty) {
+          debugPrint('Laudo não encontrado localmente, consultando Supabase...');
+          final laudoSupabase = await SupabaseService.buscarLaudoPorNumero(searchKey);
+          if (laudoSupabase != null) {
+            laudoExistente = laudoSupabase;
+          }
+        }
+
         debugPrint('=== LAUDO ENCONTRADO: ${laudoExistente.isNotEmpty} ===');
         
         if (laudoExistente.isNotEmpty) {
-          // Guardar ID real do laudo
           _laudoIdReal = laudoExistente['id']?.toString();
           
           setState(() {
-            // Carregar dados dos campos de texto
             _origemController.text = laudoExistente['origem']?.toString() ?? '';
             _destinoController.text = laudoExistente['destino']?.toString() ?? '';
             _notaFiscalController.text = laudoExistente['notaFiscal']?.toString() ?? '';
@@ -103,7 +113,6 @@ class _ClassificacaoLaudoScreenState extends State<ClassificacaoLaudoScreen> {
             _transportadoraController.text = laudoExistente['transportadora']?.toString() ?? '';
             _nomeClassificadorController.text = laudoExistente['nomeClassificador']?.toString() ?? '';
             
-            // Carregar dados dos dropdowns
             _odor = laudoExistente['odor']?.toString();
             _sementes = laudoExistente['sementes']?.toString();
             _tipoDivergencia = laudoExistente['tipo']?.toString();

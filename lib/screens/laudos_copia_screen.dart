@@ -1045,6 +1045,18 @@ class _LaudosCopiaScreenState extends State<LaudosCopiaScreen> {
                                         ),
                                       ),
                                     ],
+                                    if (laudo['certificadora'] != null) ...[
+                                      const SizedBox(width: 12),
+                                      Icon(Icons.verified, size: 14, color: Colors.white.withOpacity(0.6)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        laudo['certificadora'],
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.8),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                                 

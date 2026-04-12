@@ -40,7 +40,7 @@ class AuthService {
 
   // Usuários pré-cadastrados para teste
   static const Map<String, String> _predefinedUsers = {
-    'admin@audgraos.com': 'admin1894',
+    'jailson@audgraos.com': 'jailson1894',
     'usuario@audgraos.com': 'user1894',
   };
 
@@ -69,8 +69,8 @@ class AuthService {
         _currentUser = User(
           uid: 'audgraos_${email.split('@')[0]}',
           email: email,
-          displayName: email == 'admin@audgraos.com' ? 'Administrador' : 'Usuário Audgraos',
-          photoURL: email == 'admin@audgraos.com' 
+          displayName: email == 'jailson@audgraos.com' ? 'Administrador' : 'Usuário Audgraos',
+          photoURL: email == 'jailson@audgraos.com' 
             ? 'https://picsum.photos/seed/admin/100/100'
             : 'https://picsum.photos/seed/usuario/100/100',
           emailVerified: true,
@@ -288,7 +288,7 @@ class AuthService {
         'email': entry.key,
         'senha': entry.value,
         'nome': entry.key.split('@')[0],
-        'tipo': entry.key == 'admin@audgraos.com' ? 'admin' : 'auditor',
+        'tipo': entry.key == 'jailson@audgraos.com' ? 'admin' : 'auditor',
       }).toList();
     }
   }
@@ -324,7 +324,7 @@ class AuthService {
             'email': entry.key,
             'senha': entry.value,
             'nome': entry.key.split('@')[0],
-            'tipo': entry.key == 'admin@audgraos.com' ? 'admin' : 'auditor',
+            'tipo': entry.key == 'jailson@audgraos.com' ? 'admin' : 'auditor',
           }).toList();
         }
         
@@ -380,7 +380,7 @@ class AuthService {
     if (_currentUser == null) return false;
     
     // Admin pré-definido
-    if (_currentUser!.email == 'admin@audgraos.com') return true;
+    if (_currentUser!.email == 'jailson@audgraos.com') return true;
     
     // Para usuários dinâmicos, precisaríamos armazenar o tipo no User
     // Por enquanto, vamos verificar pelo email
@@ -391,7 +391,7 @@ class AuthService {
   static String getCurrentUserType() {
     if (_currentUser == null) return 'auditor';
     
-    if (_currentUser!.email == 'admin@audgraos.com') return 'admin';
+    if (_currentUser!.email == 'jailson@audgraos.com') return 'admin';
     return 'auditor';
   }
 
